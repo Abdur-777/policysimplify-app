@@ -21,7 +21,8 @@ authenticator = stauth.Authenticate(
     config['preauthorized']
 )
 
-name, authentication_status, username = authenticator.login("Login", "main")
+fields = {"Form name": "Login"}
+name, authentication_status, username = authenticator.login(fields=fields)
 
 if authentication_status is False:
     st.error("Incorrect username or password")
