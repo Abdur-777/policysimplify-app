@@ -5,7 +5,6 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
-from fpdf import FPDF
 
 # === BRANDING ===
 COUNCIL_NAME = "Wyndham City Council"
@@ -47,7 +46,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Feedback or support?**")
     st.markdown(
-        "<a href='mailto:support@policysimplify.com?subject=PolicySimplify%20AI%20Support' target='_blank' style='text-decoration:none;'><button style='background:#1764a7;color:white;padding:6px 16px;border:none;border-radius:9px;margin-top:6px;cursor:pointer;font-size:1em;'>Contact Support</button></a>",
+        "<a href='mailto:civreplywyndham@gmail.com?subject=PolicySimplify%20AI%20Support' target='_blank' style='text-decoration:none;'><button style='background:#1764a7;color:white;padding:6px 16px;border:none;border-radius:9px;margin-top:6px;cursor:pointer;font-size:1em;'>Contact Support</button></a>",
         unsafe_allow_html=True
     )
     st.markdown("---")
@@ -224,20 +223,20 @@ Question: {query}
     return response.choices[0].message.content.strip()
 
 def get_deadline_color(deadline_str):
-    if not deadline_str: return None
+    if not deadline_str: return "#eaf3fa"  # default
     try:
         if "within" in deadline_str or "every" in deadline_str:
-            return "reminder-upcoming"
+            return "#f3c852"  # yellow chip
         date = pd.to_datetime(deadline_str, errors="coerce")
-        if pd.isnull(date): return None
+        if pd.isnull(date): return "#eaf3fa"
         today = pd.Timestamp.now()
         if date < today:
-            return "reminder"  # Overdue
+            return "#e65c5c"  # red overdue
         elif (date - today).days <= 7:
-            return "reminder-upcoming"  # Due soon
+            return "#f3c852"  # yellow due soon
     except:
-        return None
-    return None
+        return "#eaf3fa"
+    return "#eaf3fa"
 
 if uploaded_files:
     all_policy_text = ""
@@ -285,10 +284,10 @@ if uploaded_files:
     for fname, doc in st.session_state['obligations'].items():
         for obl in doc["obligations"]:
             color = get_deadline_color(obl.get("deadline", ""))
-            if color == "reminder":
+            if color == "#e65c5c":
                 st.markdown(f'<span class="reminder">Overdue:</span> <b>{obl["text"]}</b>', unsafe_allow_html=True)
                 reminder_count += 1
-            elif color == "reminder-upcoming":
+            elif color == "#f3c852":
                 st.markdown(f'<span class="reminder-upcoming">Due Soon:</span> <b>{obl["text"]}</b>', unsafe_allow_html=True)
                 upcoming_count += 1
     if reminder_count == 0 and upcoming_count == 0:
@@ -328,55 +327,43 @@ if uploaded_files:
     else:
         st.info("No matching obligations found.")
 
-    # === OBLIGATION CARDS ===
+    # === STEP 4: VISUAL OBLIGATION CARDS ===
     st.markdown("---")
+    st.markdown("""
+    <style>
+    .ob-card {background:#fff;border-radius:18px;box-shadow:0 2px 14px #1966b222;margin-bottom:20px;padding:22px 22px 16px 22px;}
+    .ob-title {font-size:1.09em; font-weight:600; color:#1966b2;}
+    .ob-done {color:#59c12a; font-weight:700;}
+    .ob-chip {display:inline-block; background:#e3f2fd; color:#1764a7; border-radius:9px; padding:2px 11px 3px 11px; margin-right:7px; font-size:0.97em;}
+    .ob-overdue {background:#e65c5c; color:#fff;}
+    .ob-upcoming {background:#f3c852; color:#444;}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("## 📊 Compliance Dashboard (Card View)")
     for fname, doc in st.session_state['obligations'].items():
-        with st.expander(f"📑 {fname}", expanded=False):
-            st.markdown(f"**Summary:**<br>{doc['summary']}", unsafe_allow_html=True)
-            st.markdown("**Obligations & Actions:**")
-            for idx, obl in enumerate(doc["obligations"]):
-                cols = st.columns([0.07,0.68,0.13,0.12])
-                with cols[0]:
-                    checked = st.checkbox("", value=obl['done'], key=f"{fname}_check_{idx}")
-                    if checked != obl['done']:
-                        doc['obligations'][idx]['done'] = checked
-                        doc['obligations'][idx]['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        st.session_state['audit_log'].append({
-                            "action": "check" if checked else "uncheck",
-                            "file": fname,
-                            "obligation": obl['text'],
-                            "who": "You",
-                            "time": doc['obligations'][idx]['timestamp']
-                        })
-                with cols[1]:
-                    st.markdown(obl['text'])
-                with cols[2]:
-                    assigned_to = st.text_input(
-                        "Assign", value=obl.get("assigned_to",""), key=f"{fname}_assign_{idx}", label_visibility="collapsed", placeholder="Assign to"
-                    )
-                    if assigned_to != obl.get("assigned_to",""):
-                        doc['obligations'][idx]['assigned_to'] = assigned_to
-                        st.session_state['audit_log'].append({
-                            "action": "assign",
-                            "file": fname,
-                            "obligation": obl['text'],
-                            "who": assigned_to,
-                            "time": datetime.now().strftime("%Y-%m-%d %H:%M")
-                        })
-                with cols[3]:
-                    deadline = st.text_input(
-                        "Deadline", value=obl.get("deadline",""), key=f"{fname}_deadline_{idx}", label_visibility="collapsed", placeholder="Deadline (YYYY-MM-DD)"
-                    )
-                    if deadline != obl.get("deadline",""):
-                        doc['obligations'][idx]['deadline'] = deadline
-                        st.session_state['audit_log'].append({
-                            "action": "deadline_change",
-                            "file": fname,
-                            "obligation": obl['text'],
-                            "who": "You",
-                            "time": datetime.now().strftime("%Y-%m-%d %H:%M")
-                        })
-            st.caption("AI-generated. Please review obligations before action.")
+        st.markdown(f"<div class='ob-title'>📑 {fname}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-bottom:8px;color:#1565c0;font-size:1.06em;'><b>Summary:</b> {doc['summary']}</div>", unsafe_allow_html=True)
+        for idx, obl in enumerate(doc["obligations"]):
+            color = get_deadline_color(obl.get("deadline", ""))
+            chip_class = "ob-chip"
+            if color == "#e65c5c":
+                chip_class += " ob-overdue"
+            elif color == "#f3c852":
+                chip_class += " ob-upcoming"
+            status_icon = "✅" if obl['done'] else "⬜️"
+            st.markdown(
+                f"""
+                <div class="ob-card">
+                    <span style="font-size:1.23em;">{status_icon}</span>
+                    <b style="margin-left:7px;">{obl['text']}</b><br>
+                    <span class="{chip_class}">{'Overdue' if color=='#e65c5c' else ('Due soon' if color=='#f3c852' else 'Deadline')}</span>
+                    <span class="ob-chip">{obl.get('deadline', '')}</span>
+                    <span class="ob-chip" style="background:#e3ffd6;color:#388e3c;">Assigned: {obl.get('assigned_to','')}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
     # === POLICY Q&A CHAT ===
     st.markdown("---")
