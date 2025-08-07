@@ -2,102 +2,32 @@ import streamlit as st
 import PyPDF2
 import openai
 import os
-import json
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
 
 # === BRANDING ===
 COUNCIL_NAME = "Wyndham City Council"
-COUNCIL_LOGO = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/Emblem_of_Australia.svg/1200px-Emblem_of_Australia.svg.png"  # Government icon
-BG_COLOR = "#e6f2ff"   # Light blue
+COUNCIL_LOGO = "https://www.wyndham.vic.gov.au/themes/custom/wyndham/logo.png"
 
 st.set_page_config(page_title="PolicySimplify AI", page_icon="✅", layout="centered")
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = openai.OpenAI(api_key=OPENAI_API_KEY)  # NEW SDK style
 
-# --- OpenAI CLIENT (new style) ---
-client = openai.OpenAI(api_key=OPENAI_API_KEY)
-
-# === CUSTOM STYLING ===
+# --- HEADER ---
 st.markdown(f"""
-    <style>
-    body {{
-        background-color: {BG_COLOR};
-    }}
-    .stApp {{
-        background-color: {BG_COLOR};
-    }}
-    .main-header {{
-        background: {BG_COLOR};
-        padding: 32px 0 16px 0;
-        border-radius: 0 0 24px 24px;
-        box-shadow: 0 4px 12px #d9e9fa;
-        margin-bottom: 2em;
-    }}
-    .council-badge {{
-        color: #0066cc;
-        background: #ffffffbb;
-        border-radius: 8px;
-        padding: 4px 18px;
-        margin: 0 auto 14px auto;
-        display: inline-block;
-        font-weight: 600;
-        font-size: 1.04em;
-        letter-spacing: 1px;
-        box-shadow: 0 2px 6px #b7d7f6;
-    }}
-    .policysimplify-title {{
-        font-size: 2.6em;
-        color: #1764a7;
-        font-weight: bold;
-        margin-bottom: 0.05em;
-        text-align: center;
-    }}
-    .ai-blurb {{
-        font-size: 1.18em;
-        color: #1764a7;
-        margin-bottom: 0.6em;
-        text-align: center;
-    }}
-    .info-line {{
-        color: #1a7737;
-        font-size: 1.1em;
-        font-weight: 600;
-        text-align: center;
-        margin-bottom: 20px;
-    }}
-    .export-btn button {{
-        background: #146bb1 !important;
-        color: #fff !important;
-        border-radius: 8px !important;
-    }}
-    </style>
-""", unsafe_allow_html=True)
-
-# === HEADER SECTION ===
-st.markdown(f"""
-<div class="main-header">
-    <div style="text-align:center;">
-        <img src="{COUNCIL_LOGO}" alt="logo" width="66" style="margin-bottom:14px;"/>
-    </div>
-    <div class="policysimplify-title">
-        PolicySimplify AI
-    </div>
-    <div class="council-badge">Council: Wyndham</div>
-    <div class="ai-blurb">
-        Instantly simplify council compliance.<br>
-        Upload a policy PDF. Instantly get an AI-powered summary, obligations, and compliance checklist.<br>
-        <span style="color: #59c12a;">Australian-hosted • Secure • Unlimited uploads</span>
-    </div>
+<div style="background:linear-gradient(90deg,#e3f2fd 0,#bbdefb 100%);padding:24px 8px 12px 8px;border-radius:0 0 26px 26px;text-align:center;margin-bottom:24px;">
+    <img src="{COUNCIL_LOGO}" alt="logo" width="105"/>
+    <div style="font-size:2em;margin-bottom:0;"><span style="vertical-align:-5px;">🏛️</span> <b>PolicySimplify AI</b></div>
+    <div style="font-size:1.15em;color:#1764a7;margin-bottom:4px;">Council: <b>{COUNCIL_NAME}</b></div>
+    <span style="font-size:1em;color:#333;">Upload council policies & instantly see what matters.<br>
+    <span style="color: #59c12a;">Australian-hosted • Secure • Unlimited uploads</span></span>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("---")
-
 # === PDF UPLOAD & PROCESSING ===
 uploaded_files = st.file_uploader("📄 Upload Policy PDF(s)", type=["pdf"], accept_multiple_files=True)
-policy_data = []
 
 def extract_pdf_text(pdf_file):
     pdf_reader = PyPDF2.PdfReader(pdf_file)
@@ -153,7 +83,6 @@ Question: {query}
     )
     return response.choices[0].message.content.strip()
 
-# --- PDF Processing Section ---
 if uploaded_files:
     st.success("PDF(s) uploaded! See instant summary and obligations below.")
     dashboard_data = []
@@ -195,8 +124,7 @@ if uploaded_files:
             label="Download Obligations CSV",
             data=df.to_csv(index=False),
             file_name="policy_obligations.csv",
-            mime="text/csv",
-            key="exportcsv"
+            mime="text/csv"
         )
     else:
         st.info("No obligations to display yet.")
@@ -216,7 +144,5 @@ else:
 
 st.markdown("---")
 st.markdown("""
-<div class="info-line">
-    PolicySimplify AI – Built for Australian councils. All data hosted securely in Australia.
-</div>
+<span style='color: #59c12a; font-weight:bold;'>PolicySimplify AI – Built for Australian councils. All data hosted securely in Australia.</span>
 """, unsafe_allow_html=True)
