@@ -5,7 +5,6 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from fpdf import FPDF
 from google.cloud import storage
 
 # === CONFIG ===
@@ -52,9 +51,7 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GCS_BUCKET = os.getenv("GCS_BUCKET")
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
-
-# GCS client
-gcs_client = storage.Client()
+gcs_client = storage.Client()  # Uses GCP IAM if deployed in GCP, else env/service key
 
 # === SESSION STATE ===
 if 'obligations' not in st.session_state:
@@ -64,18 +61,16 @@ if 'audit_log' not in st.session_state:
     st.session_state['audit_log'] = []
 
 if 'recent_uploads' not in st.session_state:
-    st.session_state['recent_uploads'] = []  # Store last 10 GCS keys
+    st.session_state['recent_uploads'] = []  # last 10 GCS keys
 
 # === GCS UTILS ===
 def upload_to_gcs(file, gcs_key):
-    """Upload a file-like object to GCS bucket under gcs_key."""
     bucket = gcs_client.bucket(GCS_BUCKET)
     blob = bucket.blob(gcs_key)
     blob.upload_from_file(file, rewind=True)
     return gcs_key
 
 def get_signed_gcs_url(blob_name, expiration_minutes=10):
-    """Generate a signed URL for a GCS blob/file that expires in N minutes."""
     bucket = gcs_client.bucket(GCS_BUCKET)
     blob = bucket.blob(blob_name)
     url = blob.generate_signed_url(
@@ -86,7 +81,6 @@ def get_signed_gcs_url(blob_name, expiration_minutes=10):
     return url
 
 def list_recent_uploads(prefix=UPLOAD_PREFIX, max_results=10):
-    """List most recent N uploads for this council/prefix."""
     bucket = gcs_client.bucket(GCS_BUCKET)
     blobs = list(bucket.list_blobs(prefix=prefix))
     blobs = sorted(blobs, key=lambda b: b.updated, reverse=True)
@@ -194,11 +188,7 @@ if uploaded_files:
 
     # --- REMINDERS ---
     st.markdown("### ⏰ Reminders")
-    reminder_count, upcoming_count = 0, 0
-    for gcs_key, doc in st.session_state['obligations'].items():
-        for obl in doc["obligations"]:
-            # For simplicity, no deadline detection here; add if you parse it.
-            pass
+    # For simplicity, demo skips deadline detection, but you can add color/deadline parsing
 
     # --- RECENT UPLOADS SECTION ---
     st.markdown("---")
