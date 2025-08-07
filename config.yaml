@@ -4,6 +4,14 @@ credentials:
       email: wyndham@council.com
       name: Wyndham Council
       password: $2b$12$zTX4H8CmQZqJVLs6lNUpwOeSHQKL8bTxvE8tL2S1aACZPVRO2Vj9S  # "llama"
+    admin:
+      email: admin@council.com
+      name: Admin User
+      password: $2b$12$sXctyM7pT4ak1LBoIuRByuZID.HhY9Q9xTpi/SZXmw8RZugyK54ti  # "test1234"
+    tester:
+      email: tester@council.com
+      name: Tester User
+      password: $2b$12$itvx0DuGzF4RI5r1WAKKzO3gFMGCMc7pHQQjZ2gsDbhDwhV93U62O  # "password"
 cookie:
   name: policysimplify_auth
   key: some_secret_key
