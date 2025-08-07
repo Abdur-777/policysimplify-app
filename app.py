@@ -24,14 +24,43 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER ---
-st.markdown(f"""
-<div style="background:#1764a7;padding:20px 0 10px 0;border-radius:16px 16px 0 0;">
-    <div style="display:flex;flex-direction:column;align-items:center;gap:0;">
-        <img src="{GOV_ICON}" width="40" style="margin-bottom:8px" />
-        <div style="font-size:2.1em;font-weight:700;color:white;">PolicySimplify AI</div>
-        <span style="color:#bfe2ff;font-size:1.08em;">Council: <b>Wyndham City Council</b></span>
-    </div>
+st.markdown("""
+<style>
+.hero-card {
+  background: linear-gradient(90deg, #1966b2 0%, #44bbff 100%);
+  color: #fff;
+  border-radius: 30px;
+  box-shadow: 0 4px 24px #1966b230;
+  padding: 34px 20px 30px 20px;
+  margin-bottom: 38px;
+  text-align: center;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.hero-icon {
+  font-size: 2.9em;
+  margin-bottom: 6px;
+}
+.hero-title {
+  font-size: 2.5em;
+  font-weight: 900;
+  letter-spacing: -1px;
+  margin-bottom: 8px;
+}
+.hero-sub {
+  font-size: 1.2em;
+  color: #e3f2fd;
+  font-weight: 400;
+  margin-bottom: 2px;
+}
+</style>
+<div class="hero-card">
+  <div class="hero-icon">📄</div>
+  <div class="hero-title">PolicySimplify AI</div>
+  <div class="hero-sub">Council: <b>Wyndham City Council</b></div>
+  <div style="font-size:1.07em; margin:14px 0 0 0;">Upload council policies & instantly see what matters.<br>
+  <span style="color:#d2ffad;">Australian-hosted • Secure • Unlimited uploads</span></div>
 </div>
 """, unsafe_allow_html=True)
 
