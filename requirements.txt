@@ -5,5 +5,4 @@ python-dotenv==1.0.1
 pandas==2.2.2
 bcrypt==4.0.1
 SQLAlchemy==2.0.30
-PyYAML==6.0
-streamlit-authenticator==0.3.2
+
