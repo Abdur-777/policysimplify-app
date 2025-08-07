@@ -3,36 +3,30 @@ import PyPDF2
 import openai
 import os
 import pandas as pd
-import json
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 from fpdf import FPDF
 from google.cloud import storage
-from models import create_db, SessionLocal, PolicyDoc, AuditLog
 
 # === CONFIG ===
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GCS_BUCKET = os.getenv("GCS_BUCKET")
-GCS_KEY_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-
-client = openai.OpenAI(api_key=OPENAI_API_KEY)
-storage_client = storage.Client.from_service_account_json(GCS_KEY_PATH)
-bucket = storage_client.bucket(GCS_BUCKET)
-
 COUNCIL_NAME = "Wyndham City Council"
 COUNCIL_LOGO = "https://www.wyndham.vic.gov.au/themes/custom/wyndham/logo.png"
 GOV_ICON = "https://cdn-icons-png.flaticon.com/512/3209/3209872.png"
+UPLOAD_PREFIX = "wyndham/"   # GCS folder prefix, change per council if needed
 
 st.set_page_config(page_title="PolicySimplify AI", page_icon="✅", layout="centered")
+
 st.markdown("""
     <style>
     body, .stApp { background-color: #eaf3fa; }
     .main { background-color: #eaf3fa; }
     .reportview-container { background-color: #eaf3fa; }
+    .reminder { color: #fff; background:#e65c5c; padding: 6px 12px; border-radius: 6px; margin-right: 8px; }
+    .reminder-upcoming { color: #fff; background:#f3c852; padding: 6px 12px; border-radius: 6px; margin-right: 8px; }
     </style>
 """, unsafe_allow_html=True)
 
+# --- HEADER ---
 st.markdown(f"""
 <div style="background:#1764a7;padding:20px 0 10px 0;border-radius:16px 16px 0 0;">
     <div style="display:flex;flex-direction:column;align-items:center;gap:0;">
@@ -42,6 +36,7 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
 st.markdown("""
 <div style="margin-top:12px; margin-bottom:12px;">
     <div style="text-align:center;font-size:1.13em;color:#1764a7;">
@@ -52,17 +47,52 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.markdown("---")
 
-# === DB SETUP ===
-create_db()
-db = SessionLocal()
+# === ENV ===
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GCS_BUCKET = os.getenv("GCS_BUCKET")
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-def save_pdf_to_gcs(pdf_file, filename):
-    blob = bucket.blob(filename)
-    pdf_file.seek(0)
-    blob.upload_from_file(pdf_file, content_type="application/pdf")
-    blob.make_public()
-    return blob.public_url
+# GCS client
+gcs_client = storage.Client()
 
+# === SESSION STATE ===
+if 'obligations' not in st.session_state:
+    st.session_state['obligations'] = {}  # key: gcs_key, value: dict
+
+if 'audit_log' not in st.session_state:
+    st.session_state['audit_log'] = []
+
+if 'recent_uploads' not in st.session_state:
+    st.session_state['recent_uploads'] = []  # Store last 10 GCS keys
+
+# === GCS UTILS ===
+def upload_to_gcs(file, gcs_key):
+    """Upload a file-like object to GCS bucket under gcs_key."""
+    bucket = gcs_client.bucket(GCS_BUCKET)
+    blob = bucket.blob(gcs_key)
+    blob.upload_from_file(file, rewind=True)
+    return gcs_key
+
+def get_signed_gcs_url(blob_name, expiration_minutes=10):
+    """Generate a signed URL for a GCS blob/file that expires in N minutes."""
+    bucket = gcs_client.bucket(GCS_BUCKET)
+    blob = bucket.blob(blob_name)
+    url = blob.generate_signed_url(
+        version="v4",
+        expiration=timedelta(minutes=expiration_minutes),
+        method="GET"
+    )
+    return url
+
+def list_recent_uploads(prefix=UPLOAD_PREFIX, max_results=10):
+    """List most recent N uploads for this council/prefix."""
+    bucket = gcs_client.bucket(GCS_BUCKET)
+    blobs = list(bucket.list_blobs(prefix=prefix))
+    blobs = sorted(blobs, key=lambda b: b.updated, reverse=True)
+    return blobs[:max_results]
+
+# === PDF TEXT & AI ===
 def extract_pdf_text(pdf_file):
     pdf_reader = PyPDF2.PdfReader(pdf_file)
     text = ""
@@ -117,110 +147,133 @@ Question: {query}
     )
     return response.choices[0].message.content.strip()
 
+# === FILE UPLOAD ===
 uploaded_files = st.file_uploader("📄 Upload Policy PDF(s)", type=["pdf"], accept_multiple_files=True)
+
 if uploaded_files:
+    all_policy_text = ""
+    dashboard_data = []
     for uploaded_file in uploaded_files:
-        # Only upload if not already in DB
-        exists = db.query(PolicyDoc).filter_by(filename=uploaded_file.name).first()
-        if not exists:
-            with st.spinner(f"Uploading {uploaded_file.name} to GCS..."):
-                gcs_url = save_pdf_to_gcs(uploaded_file, uploaded_file.name)
-                pdf_text = extract_pdf_text(uploaded_file)
+        pdf_text = extract_pdf_text(uploaded_file)
+        all_policy_text += "\n\n" + pdf_text
+
+        # --- GCS Save & Log ---
+        gcs_key = UPLOAD_PREFIX + uploaded_file.name
+        if gcs_key not in st.session_state['obligations']:
+            with st.spinner(f"Uploading {uploaded_file.name} to secure council storage..."):
+                uploaded_file.seek(0)
+                upload_to_gcs(uploaded_file, gcs_key)
+            with st.spinner(f"Processing {uploaded_file.name} with AI..."):
                 ai_response = ai_summarize(pdf_text)
                 summary_part, obligations_part = ai_response.split("Obligations:", 1) if "Obligations:" in ai_response else (ai_response, "")
                 obligations_list = []
                 for line in obligations_part.strip().split("\n"):
                     if line.strip().startswith("-"):
-                        obligations_list.append(line.strip()[1:].strip())
-                doc = PolicyDoc(
-                    filename=uploaded_file.name,
-                    gcs_url=gcs_url,
-                    summary=summary_part.strip(),
-                    obligations=json.dumps(obligations_list),
-                    upload_time=datetime.utcnow()
-                )
-                db.add(doc)
-                db.commit()
-                db.refresh(doc)
-                audit = AuditLog(
-                    action="upload",
-                    filename=uploaded_file.name,
-                    obligation="",
-                    who="You",
-                    time=datetime.utcnow()
-                )
-                db.add(audit)
-                db.commit()
-    st.success("PDF(s) uploaded and processed!")
-
-# === Recent Uploads Section ===
-st.markdown("## 📂 Recent Uploads")
-recent_docs = db.query(PolicyDoc).order_by(PolicyDoc.upload_time.desc()).limit(7).all()
-if recent_docs:
-    for doc in recent_docs:
-        with st.expander(f"📑 {doc.filename} — [Download PDF]({doc.gcs_url})", expanded=False):
-            st.markdown(f"**Summary:**<br>{doc.summary}", unsafe_allow_html=True)
-            st.markdown("**Obligations & Actions:**")
-            obligations_list = json.loads(doc.obligations)
-            for obl in obligations_list:
-                st.markdown(f"- ⬜️ {obl}")
-            st.caption("AI-generated. Please review obligations before action.")
-            st.markdown(f'<a href="{doc.gcs_url}" download target="_blank">⬇️ Download Original PDF</a>', unsafe_allow_html=True)
-else:
-    st.info("No uploads yet. Upload a PDF to get started.")
-
-# === Full-text Search Section ===
-st.markdown("---")
-st.markdown("## 🔍 Full-Text Search")
-search_text = st.text_input("Search summaries or obligations...", key="search")
-search_results = []
-if search_text:
-    docs = db.query(PolicyDoc).all()
-    for doc in docs:
-        obligations_list = json.loads(doc.obligations)
-        for obl in obligations_list:
-            if (search_text.lower() in obl.lower() or search_text.lower() in doc.summary.lower()):
-                search_results.append({
-                    "Filename": doc.filename,
-                    "Obligation": obl,
-                    "Summary": doc.summary[:100] + "..." if len(doc.summary) > 100 else doc.summary,
-                    "Upload Time": doc.upload_time.strftime("%Y-%m-%d %H:%M"),
-                    "Download": doc.gcs_url
+                        obligations_list.append({
+                            "text": line.strip()[1:].strip(),
+                            "done": False,
+                            "assigned_to": "",
+                            "deadline": "",
+                            "timestamp": None
+                        })
+                st.session_state['obligations'][gcs_key] = {
+                    "summary": summary_part.strip(),
+                    "obligations": obligations_list,
+                    "filename": uploaded_file.name
+                }
+                st.session_state['audit_log'].append({
+                    "action": "upload",
+                    "file": uploaded_file.name,
+                    "obligation": "",
+                    "who": "You",
+                    "time": datetime.now().strftime("%Y-%m-%d %H:%M")
                 })
-if search_results:
-    df = pd.DataFrame(search_results)
-    st.dataframe(df, use_container_width=True)
-    st.download_button(
-        label="Download Search Results CSV",
-        data=df.to_csv(index=False),
-        file_name="search_results.csv",
-        mime="text/csv"
-    )
+                # Track recent uploads for display
+                st.session_state['recent_uploads'].insert(0, gcs_key)
+                st.session_state['recent_uploads'] = st.session_state['recent_uploads'][:10]
 
-# === Policy Q&A Chatbot ===
-st.markdown("---")
-st.markdown("## 🤖 Ask Your Policies (AI Chat)")
-st.caption("Type a question about your policies. The AI answers ONLY using your uploaded documents.")
-all_policy_text = "\n".join([extract_pdf_text(open(bucket.blob(doc.filename).download_as_bytes(), "rb")) for doc in recent_docs])
-query = st.text_input("Ask a policy/compliance question", key="policy_qa")
-if query:
-    with st.spinner("Getting answer..."):
-        answer = ai_chat(query, all_policy_text)
-    st.success(answer)
+    # --- REMINDERS ---
+    st.markdown("### ⏰ Reminders")
+    reminder_count, upcoming_count = 0, 0
+    for gcs_key, doc in st.session_state['obligations'].items():
+        for obl in doc["obligations"]:
+            # For simplicity, no deadline detection here; add if you parse it.
+            pass
 
-# === Audit Log Section ===
-st.markdown("---")
-st.markdown("## 🕵️ Audit Log & Download")
-audit_logs = db.query(AuditLog).order_by(AuditLog.time.desc()).limit(100).all()
-if audit_logs:
-    audit_data = [{
-        "Action": log.action,
-        "Filename": log.filename,
-        "Obligation": log.obligation,
-        "Who": log.who,
-        "Time": log.time.strftime("%Y-%m-%d %H:%M")
-    } for log in audit_logs]
-    audit_df = pd.DataFrame(audit_data)
+    # --- RECENT UPLOADS SECTION ---
+    st.markdown("---")
+    st.markdown("### 📂 Recent Uploads")
+    blobs = list_recent_uploads()
+    for blob in blobs:
+        signed_url = get_signed_gcs_url(blob.name)
+        st.markdown(f"**{os.path.basename(blob.name)}** — {blob.updated.strftime('%Y-%m-%d %H:%M')} &nbsp;&nbsp; [🔽 Download]({signed_url})", unsafe_allow_html=True)
+
+    # --- DASHBOARD ---
+    st.markdown("---")
+    st.markdown("## 📊 Compliance Dashboard & Export")
+    for gcs_key, doc in st.session_state['obligations'].items():
+        with st.expander(f"📑 {doc['filename']}", expanded=False):
+            st.markdown(f"**Summary:**<br>{doc['summary']}", unsafe_allow_html=True)
+            st.markdown("**Obligations & Actions:**")
+            for idx, obl in enumerate(doc['obligations']):
+                cols = st.columns([0.07,0.68,0.13,0.12])
+                with cols[0]:
+                    checked = st.checkbox("", value=obl['done'], key=f"{gcs_key}_check_{idx}")
+                    if checked != obl['done']:
+                        doc['obligations'][idx]['done'] = checked
+                        doc['obligations'][idx]['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        st.session_state['audit_log'].append({
+                            "action": "check" if checked else "uncheck",
+                            "file": doc['filename'],
+                            "obligation": obl['text'],
+                            "who": "You",
+                            "time": doc['obligations'][idx]['timestamp']
+                        })
+                with cols[1]:
+                    st.markdown(obl['text'])
+                with cols[2]:
+                    assigned_to = st.text_input(
+                        "Assign", value=obl.get("assigned_to",""), key=f"{gcs_key}_assign_{idx}", label_visibility="collapsed", placeholder="Assign to"
+                    )
+                    if assigned_to != obl.get("assigned_to",""):
+                        doc['obligations'][idx]['assigned_to'] = assigned_to
+                        st.session_state['audit_log'].append({
+                            "action": "assign",
+                            "file": doc['filename'],
+                            "obligation": obl['text'],
+                            "who": assigned_to,
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        })
+                with cols[3]:
+                    deadline = st.text_input(
+                        "Deadline", value=obl.get("deadline",""), key=f"{gcs_key}_deadline_{idx}", label_visibility="collapsed", placeholder="Deadline (YYYY-MM-DD)"
+                    )
+                    if deadline != obl.get("deadline",""):
+                        doc['obligations'][idx]['deadline'] = deadline
+                        st.session_state['audit_log'].append({
+                            "action": "deadline_change",
+                            "file": doc['filename'],
+                            "obligation": obl['text'],
+                            "who": "You",
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        })
+            st.caption("AI-generated. Please review obligations before action.")
+
+    # === POLICY Q&A CHAT ===
+    st.markdown("---")
+    st.markdown("## 🤖 Ask Your Policies (AI Chat)")
+    st.caption("Type a question about your policies. The AI answers ONLY using your uploaded documents.")
+    query = st.text_input("Ask a policy/compliance question", key="policy_qa")
+    if query:
+        with st.spinner("Getting answer..."):
+            answer = ai_chat(query, all_policy_text)
+        st.success(answer)
+
+    # === AUDIT LOG ===
+    st.markdown("---")
+    st.markdown("## 🕵️ Audit Log")
+    st.caption("All major actions are tracked for compliance and audit reporting.")
+    audit_df = pd.DataFrame(st.session_state['audit_log'])
     st.dataframe(audit_df, use_container_width=True)
     st.download_button(
         label="Download Audit Log CSV",
@@ -229,7 +282,10 @@ if audit_logs:
         mime="text/csv"
     )
 
+else:
+    st.info("Upload one or more council policy PDFs to begin.")
+
 st.markdown("---")
 st.markdown("""
-<span style='color: #59c12a; font-weight:bold;'>PolicySimplify AI – Built for Australian councils. All data hosted securely in Australia (GCS).</span>
+<span style='color: #59c12a; font-weight:bold;'>PolicySimplify AI – Built for Australian councils. All data hosted securely in Australia.</span>
 """, unsafe_allow_html=True)
