@@ -7,73 +7,93 @@ import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
 
-# === BRANDING CONFIG ===
+# === BRANDING ===
 COUNCIL_NAME = "Wyndham City Council"
-COUNCIL_LOGO = "https://www.wyndham.vic.gov.au/themes/custom/wyndham/logo.png"
-PRIMARY_COLOR = "#e3f1fa"  # Light blue
+COUNCIL_LOGO = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/Emblem_of_Australia.svg/1200px-Emblem_of_Australia.svg.png"  # Government icon
+BG_COLOR = "#e6f2ff"   # Light blue
 
-# === PAGE CONFIG & ENV ===
-st.set_page_config(page_title="PolicySimplify AI", page_icon="🏛️", layout="centered")
+st.set_page_config(page_title="PolicySimplify AI", page_icon="✅", layout="centered")
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
 
-# === CUSTOM CSS FOR BACKGROUND BAR ===
+# --- OpenAI CLIENT (new style) ---
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+# === CUSTOM STYLING ===
 st.markdown(f"""
     <style>
-        body {{
-            background-color: #f8fbfc;
-        }}
-        .policy-header {{
-            background: linear-gradient(90deg, {PRIMARY_COLOR} 80%, #fff 100%);
-            border-bottom: 2px solid #b0d7ef;
-            border-radius: 0 0 16px 16px;
-            padding: 24px 0 20px 0;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 8px 0 #e0e6ed36;
-        }}
-        .side-panel {{
-            background: {PRIMARY_COLOR};
-            border-radius: 16px;
-            margin-bottom: 24px;
-            padding: 14px 20px 10px 20px;
-            box-shadow: 0 2px 8px 0 #e0e6ed14;
-        }}
-        .stApp {{
-            background-color: #f8fbfc;
-        }}
+    body {{
+        background-color: {BG_COLOR};
+    }}
+    .stApp {{
+        background-color: {BG_COLOR};
+    }}
+    .main-header {{
+        background: {BG_COLOR};
+        padding: 32px 0 16px 0;
+        border-radius: 0 0 24px 24px;
+        box-shadow: 0 4px 12px #d9e9fa;
+        margin-bottom: 2em;
+    }}
+    .council-badge {{
+        color: #0066cc;
+        background: #ffffffbb;
+        border-radius: 8px;
+        padding: 4px 18px;
+        margin: 0 auto 14px auto;
+        display: inline-block;
+        font-weight: 600;
+        font-size: 1.04em;
+        letter-spacing: 1px;
+        box-shadow: 0 2px 6px #b7d7f6;
+    }}
+    .policysimplify-title {{
+        font-size: 2.6em;
+        color: #1764a7;
+        font-weight: bold;
+        margin-bottom: 0.05em;
+        text-align: center;
+    }}
+    .ai-blurb {{
+        font-size: 1.18em;
+        color: #1764a7;
+        margin-bottom: 0.6em;
+        text-align: center;
+    }}
+    .info-line {{
+        color: #1a7737;
+        font-size: 1.1em;
+        font-weight: 600;
+        text-align: center;
+        margin-bottom: 20px;
+    }}
+    .export-btn button {{
+        background: #146bb1 !important;
+        color: #fff !important;
+        border-radius: 8px !important;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
-# === HEADER BAR ===
-st.markdown(
-    f"""
-    <div class='policy-header' style='text-align:center;'>
-        <div>
-            <span style="font-size:2.5em; font-weight:bold; vertical-align:middle; margin-right:7px;">🏛️</span>
-            <span style="font-size:2.35em; font-weight:bold; color:#1764a7;">PolicySimplify AI</span>
-        </div>
-        <div style="font-size:1.18em; color:#1764a7; font-weight:500; margin-top:8px;">
-            <img src="{COUNCIL_LOGO}" width="38" style="vertical-align:middle; margin-right:6px; margin-bottom:6px;">
-            Council: <span style="color:#1d3557;">{COUNCIL_NAME}</span>
-        </div>
+# === HEADER SECTION ===
+st.markdown(f"""
+<div class="main-header">
+    <div style="text-align:center;">
+        <img src="{COUNCIL_LOGO}" alt="logo" width="66" style="margin-bottom:14px;"/>
     </div>
-    """,
-    unsafe_allow_html=True,
-)
+    <div class="policysimplify-title">
+        PolicySimplify AI
+    </div>
+    <div class="council-badge">Council: Wyndham</div>
+    <div class="ai-blurb">
+        Instantly simplify council compliance.<br>
+        Upload a policy PDF. Instantly get an AI-powered summary, obligations, and compliance checklist.<br>
+        <span style="color: #59c12a;">Australian-hosted • Secure • Unlimited uploads</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-# === MAIN PANEL: COUNCIL INFO ===
-with st.container():
-    st.markdown(
-        f"""
-        <div class='side-panel'>
-            <div style="font-size:1.1em; color:#1764a7;">Upload council policies & instantly see what matters.</div>
-            <div style="font-size:1.08em; color:#333;">AI-powered summaries, obligations, compliance checklist & smart policy Q&amp;A.<br>
-            <span style="color: #59c12a;">Australian-hosted • Secure • Unlimited uploads</span></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+st.markdown("---")
 
 # === PDF UPLOAD & PROCESSING ===
 uploaded_files = st.file_uploader("📄 Upload Policy PDF(s)", type=["pdf"], accept_multiple_files=True)
@@ -107,10 +127,10 @@ Policy text:
 {text[:5000]}
 \"\"\"
 """
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.15,
+        temperature=0.2,
         max_tokens=700
     )
     return response.choices[0].message.content.strip()
@@ -125,10 +145,10 @@ Answer this council staff question using ONLY the info above. If unsure, say "No
 
 Question: {query}
 """
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.17,
+        temperature=0.2,
         max_tokens=400
     )
     return response.choices[0].message.content.strip()
@@ -175,7 +195,8 @@ if uploaded_files:
             label="Download Obligations CSV",
             data=df.to_csv(index=False),
             file_name="policy_obligations.csv",
-            mime="text/csv"
+            mime="text/csv",
+            key="exportcsv"
         )
     else:
         st.info("No obligations to display yet.")
@@ -194,7 +215,8 @@ else:
     st.info("Upload one or more council policy PDFs to begin.")
 
 st.markdown("---")
-st.markdown(
-    "<span style='color: #59c12a; font-weight:bold;'>PolicySimplify AI – Built for Australian councils. All data hosted securely in Australia.</span>",
-    unsafe_allow_html=True
-)
+st.markdown("""
+<div class="info-line">
+    PolicySimplify AI – Built for Australian councils. All data hosted securely in Australia.
+</div>
+""", unsafe_allow_html=True)
