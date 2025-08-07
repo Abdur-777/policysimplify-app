@@ -1,13 +1,9 @@
 credentials:
   usernames:
-    wyndham:
+    Wyndham:
       email: wyndham@council.com
       name: Wyndham Council
-      password: $2b$12$xGbS5uf6E/18VrpK0ibPquW2f.kHcQntpT5JdM6w4kGaxOjOvbdQC  # "password1"
-    hobsonsbay:
-      email: hobsonsbay@council.com
-      name: Hobsons Bay Council
-      password: $2b$12$F24b5E2n7mM6GCe/hv3ma.hb/MxUQ/OiGCV1jFjkCfFQnMTnZJ0fW  # "password2"
+      password: $2b$12$zTX4H8CmQZqJVLs6lNUpwOeSHQKL8bTxvE8tL2S1aACZPVRO2Vj9S  # "llama"
 cookie:
   name: policysimplify_auth
   key: some_secret_key
