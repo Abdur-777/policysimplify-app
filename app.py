@@ -12,6 +12,47 @@ COUNCIL_NAME = "Wyndham City Council"
 COUNCIL_LOGO = "https://www.wyndham.vic.gov.au/themes/custom/wyndham/logo.png"
 GOV_ICON = "https://cdn-icons-png.flaticon.com/512/3209/3209872.png"
 
+# === SIDEBAR ===
+with st.sidebar:
+    st.markdown(
+        f"""
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom: 18px;">
+            <img src="{COUNCIL_LOGO}" width="54" style="border-radius:13px;box-shadow:0 1px 8px #1112;"/>
+            <div style="font-size:1.24em; font-weight:700; color:#1565c0;">{COUNCIL_NAME}</div>
+        </div>
+        """, unsafe_allow_html=True
+    )
+    st.markdown(
+        """
+        <style>
+        .sidebar-link {
+            display: block;
+            padding: 10px 0 8px 0;
+            color: #1565c0;
+            font-size: 1.08em;
+            font-weight: 500;
+            border-radius: 6px;
+            text-decoration: none;
+        }
+        .sidebar-link:hover {
+            background: #e3f2fd;
+        }
+        </style>
+        """, unsafe_allow_html=True
+    )
+    st.markdown('<div class="sidebar-link" style="background:#e3f2fd;"><span style="vertical-align:-2px;">📄</span> Policy Upload</div>', unsafe_allow_html=True)
+    st.markdown('<a class="sidebar-link" href="#reminders">⏰ Reminders</a>', unsafe_allow_html=True)
+    st.markdown('<a class="sidebar-link" href="#dashboard">📊 Dashboard</a>', unsafe_allow_html=True)
+    st.markdown('<a class="sidebar-link" href="#audit-log">🕵️ Audit Log</a>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("**Feedback or support?**")
+    st.markdown(
+        "<a href='mailto:support@policysimplify.com?subject=PolicySimplify%20AI%20Support' target='_blank' style='text-decoration:none;'><button style='background:#1764a7;color:white;padding:6px 16px;border:none;border-radius:9px;margin-top:6px;cursor:pointer;font-size:1em;'>Contact Support</button></a>",
+        unsafe_allow_html=True
+    )
+    st.markdown("---")
+    st.caption("🔒 All data stored securely in Australia.")
+
 # PAGE STYLING
 st.set_page_config(page_title="PolicySimplify AI", page_icon="✅", layout="centered")
 st.markdown("""
@@ -24,6 +65,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- HERO HEADER ---
 st.markdown("""
 <style>
 .hero-card {
@@ -64,14 +106,51 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# --- UPLOAD CARD (themed upload zone) ---
 st.markdown("""
-<div style="margin-top:12px; margin-bottom:12px;">
-    <div style="text-align:center;font-size:1.13em;color:#1764a7;">
-        Upload council policies & instantly see what matters.<br>
-        <span style="color:#59c12a;font-weight:500;">Australian-hosted • Secure • Unlimited uploads</span>
-    </div>
+<style>
+.upload-card {
+    background: #fff;
+    border-radius: 24px;
+    box-shadow: 0 2px 16px #1764a722;
+    padding: 32px 30px 20px 30px;
+    margin: 0 auto 30px auto;
+    max-width: 500px;
+    min-width: 320px;
+    text-align: center;
+}
+.upload-title {
+    font-size: 1.45em;
+    font-weight: 600;
+    color: #1764a7;
+    margin-bottom: 10px;
+    letter-spacing: -.02em;
+}
+.upload-sub {
+    font-size: 1em;
+    color: #337cc3;
+    margin-bottom: 20px;
+}
+.upload-icon {
+    font-size: 2.6em;
+    margin-bottom: 2px;
+}
+</style>
+<div class="upload-card">
+    <div class="upload-icon">📤</div>
+    <div class="upload-title">Upload Policy PDF(s)</div>
+    <div class="upload-sub">Drag & drop or click to select policy documents.<br>
+    <span style="color:#59c12a;">Max 200MB each • PDF only</span></div>
 </div>
 """, unsafe_allow_html=True)
+
+uploaded_files = st.file_uploader(
+    "",
+    type=["pdf"],
+    accept_multiple_files=True,
+    label_visibility="collapsed"
+)
+
 st.markdown("---")
 
 # === OPENAI KEY ===
@@ -88,9 +167,6 @@ if 'audit_log' not in st.session_state:
 
 if 'search_text' not in st.session_state:
     st.session_state['search_text'] = ""
-
-# === FILE UPLOAD ===
-uploaded_files = st.file_uploader("📄 Upload Policy PDF(s)", type=["pdf"], accept_multiple_files=True)
 
 def extract_pdf_text(pdf_file):
     pdf_reader = PyPDF2.PdfReader(pdf_file)
@@ -147,7 +223,6 @@ Question: {query}
     )
     return response.choices[0].message.content.strip()
 
-# --- REMINDER LOGIC ---
 def get_deadline_color(deadline_str):
     if not deadline_str: return None
     try:
@@ -164,7 +239,6 @@ def get_deadline_color(deadline_str):
         return None
     return None
 
-# --- PDF Processing ---
 if uploaded_files:
     all_policy_text = ""
     dashboard_data = []
@@ -237,7 +311,7 @@ if uploaded_files:
                     "Filename": fname,
                     "Summary": doc["summary"][:100]+"..." if len(doc["summary"]) > 100 else doc["summary"],
                     "Obligation": obl["text"],
-                    "Done": "✅" if obl["done"] else "⬜️",
+                    "Done": "✅" if obl['done'] else "⬜️",
                     "Assigned to": obl.get("assigned_to",""),
                     "Deadline": obl.get("deadline",""),
                     "Timestamp": obl.get("timestamp","")
@@ -260,7 +334,7 @@ if uploaded_files:
         with st.expander(f"📑 {fname}", expanded=False):
             st.markdown(f"**Summary:**<br>{doc['summary']}", unsafe_allow_html=True)
             st.markdown("**Obligations & Actions:**")
-            for idx, obl in enumerate(doc['obligations']):
+            for idx, obl in enumerate(doc["obligations"]):
                 cols = st.columns([0.07,0.68,0.13,0.12])
                 with cols[0]:
                     checked = st.checkbox("", value=obl['done'], key=f"{fname}_check_{idx}")
