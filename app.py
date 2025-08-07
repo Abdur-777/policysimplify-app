@@ -1,3 +1,8 @@
+from db import SessionLocal, create_db, CouncilUser, PolicyDoc
+import json
+
+create_db()
+
 import streamlit as st
 import streamlit_authenticator as stauth
 import yaml
