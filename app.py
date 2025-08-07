@@ -167,6 +167,9 @@ if 'audit_log' not in st.session_state:
 if 'search_text' not in st.session_state:
     st.session_state['search_text'] = ""
 
+if 'recent_uploads' not in st.session_state:
+    st.session_state['recent_uploads'] = []
+
 def extract_pdf_text(pdf_file):
     pdf_reader = PyPDF2.PdfReader(pdf_file)
     text = ""
@@ -244,6 +247,18 @@ if uploaded_files:
     for uploaded_file in uploaded_files:
         pdf_text = extract_pdf_text(uploaded_file)
         all_policy_text += "\n\n" + pdf_text
+
+        # --- Recent Uploads Logic ---
+        uploaded = any(
+            entry['filename'] == uploaded_file.name
+            for entry in st.session_state['recent_uploads']
+        )
+        if not uploaded:
+            st.session_state['recent_uploads'].insert(0, {
+                "filename": uploaded_file.name,
+                "uploaded_at": datetime.now().strftime('%Y-%m-%d %H:%M')
+            })
+        st.session_state['recent_uploads'] = st.session_state['recent_uploads'][:10]
 
         if uploaded_file.name not in st.session_state['obligations']:
             with st.spinner(f"Processing {uploaded_file.name}..."):
@@ -326,6 +341,49 @@ if uploaded_files:
         )
     else:
         st.info("No matching obligations found.")
+
+    # === STEP 5: RECENT UPLOADS SECTION ===
+    st.markdown("---")
+    st.markdown("""
+    <style>
+    .recent-uploads-card {
+        background: #fff;
+        border-radius: 19px;
+        box-shadow: 0 2px 13px #1966b210;
+        padding: 25px 25px 14px 25px;
+        margin: 0 auto 30px auto;
+        max-width: 520px;
+        min-width: 300px;
+    }
+    .recent-uploads-title {
+        font-size: 1.23em;
+        font-weight: 700;
+        color: #1565c0;
+        margin-bottom: 8px;
+        letter-spacing: -.01em;
+    }
+    .recent-upload-filename {
+        color: #1966b2;
+        font-weight: 500;
+        font-size: 1.07em;
+    }
+    </style>
+    <div class="recent-uploads-card">
+        <div class="recent-uploads-title">📂 Recent Uploads</div>
+    """, unsafe_allow_html=True)
+
+    recent_uploads = st.session_state['recent_uploads'][:10]
+    if recent_uploads:
+        for item in recent_uploads:
+            fname, uploaded_at = item['filename'], item['uploaded_at']
+            st.markdown(
+                f"<span class='recent-upload-filename'>• {fname}</span> &nbsp; "
+                f"<span style='color:#388e3c;font-size:0.96em;'>uploaded {uploaded_at}</span>",
+                unsafe_allow_html=True
+            )
+    else:
+        st.info("No uploads yet. Your recently uploaded files will appear here.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # === STEP 4: VISUAL OBLIGATION CARDS ===
     st.markdown("---")
