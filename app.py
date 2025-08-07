@@ -4,7 +4,7 @@ import openai
 import os
 import pandas as pd
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime
 from fpdf import FPDF
 
 # === BRANDING ===
@@ -48,7 +48,7 @@ st.markdown("---")
 # === OPENAI KEY ===
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
+client = openai.OpenAI(api_key=OPENAI_API_KEY)  # use new SDK!
 
 # === SESSION STATE ===
 if 'obligations' not in st.session_state:
@@ -63,7 +63,6 @@ if 'search_text' not in st.session_state:
 # === FILE UPLOAD ===
 uploaded_files = st.file_uploader("📄 Upload Policy PDF(s)", type=["pdf"], accept_multiple_files=True)
 
-# --- EXTRACT, AI SUMMARIZE, AND PARSE OBLIGATIONS ---
 def extract_pdf_text(pdf_file):
     pdf_reader = PyPDF2.PdfReader(pdf_file)
     text = ""
@@ -93,7 +92,7 @@ Policy text:
 {text[:5000]}
 \"\"\"
 """
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2,
@@ -111,7 +110,7 @@ Answer this council staff question using ONLY the info above. If unsure, say "No
 
 Question: {query}
 """
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2,
@@ -123,7 +122,6 @@ Question: {query}
 def get_deadline_color(deadline_str):
     if not deadline_str: return None
     try:
-        # Interpret as "YYYY-MM-DD" or "within 30 days" etc.
         if "within" in deadline_str or "every" in deadline_str:
             return "reminder-upcoming"
         date = pd.to_datetime(deadline_str, errors="coerce")
@@ -140,6 +138,7 @@ def get_deadline_color(deadline_str):
 # --- PDF Processing ---
 if uploaded_files:
     all_policy_text = ""
+    dashboard_data = []
     for uploaded_file in uploaded_files:
         pdf_text = extract_pdf_text(uploaded_file)
         all_policy_text += "\n\n" + pdf_text
@@ -286,9 +285,9 @@ if uploaded_files:
             answer = ai_chat(query, all_policy_text)
         st.success(answer)
 
-    # === AUDIT LOG + PDF EXPORT ===
+    # === AUDIT LOG ===
     st.markdown("---")
-    st.markdown("## 🕵️ Audit Log & One-Click Audit Pack")
+    st.markdown("## 🕵️ Audit Log")
     st.caption("All major actions are tracked for compliance and audit reporting.")
     audit_df = pd.DataFrame(st.session_state['audit_log'])
     st.dataframe(audit_df, use_container_width=True)
@@ -298,39 +297,6 @@ if uploaded_files:
         file_name="audit_log.csv",
         mime="text/csv"
     )
-
-    # --- Branded PDF Export ---
-    def export_pdf(dataframe, filename="policy_obligations.pdf", title="Obligation Report"):
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.set_text_color(23, 100, 167)
-        pdf.cell(0, 10, COUNCIL_NAME, ln=1, align="C")
-        pdf.image(COUNCIL_LOGO, x=10, y=12, w=30)
-        pdf.ln(10)
-        pdf.set_font("Arial", "B", 12)
-        pdf.set_text_color(23, 100, 167)
-        pdf.cell(0, 10, title, ln=1)
-        pdf.set_font("Arial", size=10)
-        pdf.set_text_color(0, 0, 0)
-        for i, row in dataframe.iterrows():
-            pdf.cell(0, 8, f"{i+1}. {row['Obligation']} | {row['Done']} | Assigned: {row['Assigned to']} | Deadline: {row['Deadline']}", ln=1)
-        pdf.output(filename)
-        with open(filename, "rb") as f:
-            pdf_bytes = f.read()
-        return pdf_bytes
-
-    st.markdown("### 📄 Download Pretty PDF Export")
-    if len(dashboard_data) > 0:
-        if st.button("Download Compliance PDF"):
-            pdf_bytes = export_pdf(pd.DataFrame(dashboard_data), title="Obligations Compliance Pack")
-            st.download_button("Download PDF", pdf_bytes, file_name="policy_obligations.pdf", mime="application/pdf")
-
-    st.markdown("### 🏛️ Download Branded Audit Pack PDF")
-    if len(audit_df) > 0:
-        if st.button("Download Audit Pack PDF"):
-            pdf_bytes = export_pdf(audit_df.rename(columns={"action":"Obligation"}), filename="audit_pack.pdf", title="Audit Log Pack")
-            st.download_button("Download PDF", pdf_bytes, file_name="audit_pack.pdf", mime="application/pdf")
 
 else:
     st.info("Upload one or more council policy PDFs to begin.")
