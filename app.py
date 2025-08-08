@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 from collections import defaultdict
 
-# Branding/Config
+# --- Branding/Config ---
 COUNCIL_NAME = "Wyndham City Council"
 COUNCIL_LOGO = "https://www.wyndham.vic.gov.au/themes/custom/wyndham/logo.png"
 GOV_ICON = "https://cdn-icons-png.flaticon.com/512/3209/3209872.png"
@@ -23,20 +23,54 @@ if "authenticated" not in st.session_state:
 def login_screen():
     st.markdown("""
     <style>
-    .login-card {background:#fff;border-radius:22px;box-shadow:0 4px 22px #1764a729;max-width:400px;padding:36px 32px 32px 32px;margin:56px auto 32px auto;}
-    .login-logo {display:flex;justify-content:center;align-items:center;gap:17px;}
-    .login-title {font-size:2em; font-weight:900; color:#1764a7;}
-    .login-sub {color:#1976d2;font-size:1.09em;margin-top:3px;}
+    .login-card {
+        background:#fff;
+        border-radius:28px;
+        box-shadow:0 6px 36px #1764a740;
+        max-width:420px;
+        padding:40px 32px 30px 32px;
+        margin:70px auto 36px auto;
+        text-align:center;
+    }
+    .login-logo {
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        gap:15px;
+        margin-bottom:10px;
+    }
+    .login-title {
+        font-size:2.25em;
+        font-weight:900;
+        color:#1764a7;
+        letter-spacing:-1.2px;
+    }
+    .login-sub {
+        color:#1976d2;
+        font-size:1.12em;
+        margin-top:5px;
+        font-weight:600;
+    }
+    .ps-privacy {
+        color:#222;
+        font-size:1.01em;
+        font-weight:400;
+        margin-top:25px;
+        background:#eaf7ef;
+        border-radius:8px;
+        padding:8px 10px 7px 10px;
+        display:block;
+    }
     </style>
     <div class='login-card'>
         <div class='login-logo'>
-            <img src='%s' width='40'>
-            <img src='%s' width='48'>
+            <img src='%s' width='42'>
             <span class='login-title'>PolicySimplify AI</span>
+            <img src='%s' width='46' style="border-radius:11px;box-shadow:0 1px 7px #1113;"/>
         </div>
-        <div class='login-sub'>Wyndham City Council</div>
+        <div class='login-sub'>%s</div>
         <div style="margin-top:17px;color:#1966b2;">Enter Council Access PIN to continue</div>
-    """ % (GOV_ICON, COUNCIL_LOGO), unsafe_allow_html=True)
+    """ % (GOV_ICON, COUNCIL_LOGO, COUNCIL_NAME), unsafe_allow_html=True)
     pin = st.text_input("Council Access PIN", type="password")
     if st.button("Login"):
         if pin == COUNCIL_PIN:
@@ -45,7 +79,12 @@ def login_screen():
             st.rerun()
         else:
             st.error("Incorrect PIN. Please try again.")
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("""
+    <span class="ps-privacy">
+        🔒 All information is <b>protected and private</b> under <b>Australian standards</b>.
+    </span>
+    </div>
+    """, unsafe_allow_html=True)
 
 if not st.session_state["authenticated"]:
     login_screen()
