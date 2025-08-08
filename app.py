@@ -7,16 +7,16 @@ from dotenv import load_dotenv
 from datetime import datetime
 from collections import defaultdict
 
-# Step 30: Constants and Branding
+# Branding/Config
 COUNCIL_NAME = "Wyndham City Council"
 COUNCIL_LOGO = "https://www.wyndham.vic.gov.au/themes/custom/wyndham/logo.png"
 GOV_ICON = "https://cdn-icons-png.flaticon.com/512/3209/3209872.png"
-COUNCIL_PIN = "4242"  # Change as needed
+COUNCIL_PIN = "4242"
 SUPPORT_EMAIL = "civreplywyndham@gmail.com"
 
 st.set_page_config(page_title="PolicySimplify AI", page_icon="✅", layout="centered")
 
-# Step 31: PIN login
+# --- PIN LOGIN ---
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
@@ -51,7 +51,7 @@ if not st.session_state["authenticated"]:
     login_screen()
     st.stop()
 
-# Step 32: Sidebar
+# --- SIDEBAR ---
 with st.sidebar:
     st.markdown(
         f"""
@@ -91,7 +91,7 @@ with st.sidebar:
     st.markdown("---")
     st.caption("🔒 All data stored securely in Australia.")
 
-# Step 33: Hero header
+# --- HERO HEADER ---
 st.markdown("""
 <style>
 .hero-card {
@@ -122,7 +122,7 @@ st.markdown("""
 </div>
 """ % (GOV_ICON, COUNCIL_LOGO), unsafe_allow_html=True)
 
-# Step 34: Upload zone
+# --- UPLOAD CARD (themed upload zone) ---
 st.markdown("""
 <style>
 .upload-card {
@@ -159,22 +159,22 @@ st.markdown("""
     <span style="color:#59c12a;">Max 200MB each • PDF only</span></div>
 </div>
 """, unsafe_allow_html=True)
+
 uploaded_files = st.file_uploader("", type=["pdf"], accept_multiple_files=True, label_visibility="collapsed")
 st.markdown("---")
 
-# Step 35: Load keys
+# --- API Keys ---
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# Step 36: Session state
+# --- Session State ---
 for k, v in {
     'obligations': {}, 'audit_log': [], 'search_text': "",
     'recent_uploads': [], 'usage': defaultdict(int)
 }.items():
     if k not in st.session_state: st.session_state[k] = v
 
-# Step 37: Helper functions
 def extract_pdf_text(pdf_file):
     pdf_reader = PyPDF2.PdfReader(pdf_file)
     return "".join([page.extract_text() or "" for page in pdf_reader.pages])
@@ -243,7 +243,6 @@ def get_deadline_color(deadline_str):
         return "#eaf3fa"
     return "#eaf3fa"
 
-# Step 38: File upload logic + usage tracking
 if uploaded_files:
     all_policy_text = ""
     dashboard_data = []
@@ -295,7 +294,7 @@ if uploaded_files:
                     "time": datetime.now().strftime("%Y-%m-%d %H:%M")
                 })
 
-    # Step 39: Reminders
+    # Reminders Bar
     st.markdown("### ⏰ Reminders")
     reminder_count, upcoming_count = 0, 0
     for fname, doc in st.session_state['obligations'].items():
@@ -310,7 +309,7 @@ if uploaded_files:
     if reminder_count == 0 and upcoming_count == 0:
         st.info("No overdue or upcoming deadlines!")
 
-    # Step 40: Full-Text Search
+    # Full-Text Search
     st.markdown("---")
     st.markdown("### 🔍 Full-Text Search")
     search_text = st.text_input("Search all obligations, summaries, and policies...", key="search")
@@ -344,7 +343,7 @@ if uploaded_files:
     else:
         st.info("No matching obligations found.")
 
-    # Step 41: Recent Uploads Section
+    # Recent Uploads Section
     st.markdown("---")
     st.markdown("""
     <style>
@@ -386,11 +385,80 @@ if uploaded_files:
         st.info("No uploads yet. Your recently uploaded files will appear here.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Step 42: Dashboard Obligation Cards
+    # Visual Obligation Cards (Compliance Dashboard)
     st.markdown("---")
     st.markdown("""
     <style>
     .ob-card {background:#fff;border-radius:18px;box-shadow:0 2px 14px #1966b222;margin-bottom:20px;padding:22px 22px 16px 22px;}
     .ob-title {font-size:1.09em; font-weight:600; color:#1966b2;}
     .ob-done {color:#59c12a; font-weight:700;}
-    .ob-chip {display:inline-block; background:#e3f2fd; color:#176
+    .ob-chip {display:inline-block; background:#e3f2fd; color:#1764a7; border-radius:9px; padding:2px 11px 3px 11px; margin-right:7px; font-size:0.97em;}
+    .ob-overdue {background:#e65c5c; color:#fff;}
+    .ob-upcoming {background:#f3c852; color:#444;}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("## 📊 Compliance Dashboard (Card View)")
+    for fname, doc in st.session_state['obligations'].items():
+        st.markdown(f"<div class='ob-title'>📑 {fname}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-bottom:8px;color:#1565c0;font-size:1.06em;'><b>Summary:</b> {doc['summary']}</div>", unsafe_allow_html=True)
+        for idx, obl in enumerate(doc["obligations"]):
+            color = get_deadline_color(obl.get("deadline", ""))
+            chip_class = "ob-chip"
+            if color == "#e65c5c":
+                chip_class += " ob-overdue"
+            elif color == "#f3c852":
+                chip_class += " ob-upcoming"
+            status_icon = "✅" if obl['done'] else "⬜️"
+            st.markdown(
+                f"""
+                <div class="ob-card">
+                    <span style="font-size:1.23em;">{status_icon}</span>
+                    <b style="margin-left:7px;">{obl['text']}</b><br>
+                    <span class="{chip_class}">{'Overdue' if color=='#e65c5c' else ('Due soon' if color=='#f3c852' else 'Deadline')}</span>
+                    <span class="ob-chip">{obl.get('deadline', '')}</span>
+                    <span class="ob-chip" style="background:#e3ffd6;color:#388e3c;">Assigned: {obl.get('assigned_to','')}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    # POLICY Q&A CHAT
+    st.markdown("---")
+    st.markdown("## 🤖 Ask Your Policies (AI Chat)")
+    st.caption("Type a question about your policies. The AI answers ONLY using your uploaded documents.")
+    query = st.text_input("Ask a policy/compliance question", key="policy_qa")
+    if query:
+        st.session_state['usage']['qa'] += 1
+        with st.spinner("Getting answer..."):
+            answer = ai_chat(query, all_policy_text)
+        st.success(answer)
+
+    # AUDIT LOG
+    st.markdown("---")
+    st.markdown("## 🕵️ Audit Log")
+    st.caption("All major actions are tracked for compliance and audit reporting.")
+    audit_df = pd.DataFrame(st.session_state['audit_log'])
+    st.dataframe(audit_df, use_container_width=True)
+    st.download_button(
+        label="Download Audit Log CSV",
+        data=audit_df.to_csv(index=False),
+        file_name="audit_log.csv",
+        mime="text/csv"
+    )
+
+    # USAGE ANALYTICS
+    st.markdown("---")
+    st.markdown("## 📈 Usage Analytics")
+    usage = st.session_state['usage']
+    st.metric("Policy PDFs Uploaded", usage["uploads"])
+    st.metric("AI Policy Q&As", usage["qa"])
+    st.caption("Counts reset on server restart. For advanced usage, connect to a database.")
+
+else:
+    st.info("Upload one or more council policy PDFs to begin.")
+
+st.markdown("---")
+st.markdown("""
+<span style='color: #59c12a; font-weight:bold;'>PolicySimplify AI – Built for Australian councils. All data hosted securely in Australia.</span>
+""", unsafe_allow_html=True)
