@@ -5,6 +5,8 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
+from fpdf import FPDF
+from io import BytesIO
 
 # === BRANDING ===
 COUNCIL_NAME = "Wyndham City Council"
@@ -241,6 +243,47 @@ def get_deadline_color(deadline_str):
         return "#eaf3fa"
     return "#eaf3fa"
 
+def export_policy_pdf(fname, summary, obligations):
+    pdf = FPDF()
+    pdf.add_page()
+    # Add logo (to temp file, as FPDF doesn't accept remote URLs directly)
+    import requests
+    from tempfile import NamedTemporaryFile
+    try:
+        logo_resp = requests.get(COUNCIL_LOGO)
+        if logo_resp.status_code == 200:
+            with NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                tmp.write(logo_resp.content)
+                logo_path = tmp.name
+            pdf.image(logo_path, 10, 8, 33)
+            os.unlink(logo_path)
+    except Exception:
+        pass
+    pdf.set_font("Arial", "B", 18)
+    pdf.cell(0, 10, "PolicySimplify AI Summary", ln=True, align="C")
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 10, f"Council: {COUNCIL_NAME}", ln=True)
+    pdf.cell(0, 10, f"Policy: {fname}", ln=True)
+    pdf.cell(0, 10, f"Exported: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+    pdf.ln(6)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 8, "Summary:", ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.multi_cell(0, 8, summary)
+    pdf.ln(4)
+    pdf.set_font("Arial", "B", 13)
+    pdf.cell(0, 8, "Compliance Obligations:", ln=True)
+    pdf.set_font("Arial", "", 11)
+    for obl in obligations:
+        done = "✅" if obl['done'] else "⬜️"
+        pdf.multi_cell(0, 7, f"{done} {obl['text']} [Deadline: {obl['deadline']}] [Assigned: {obl['assigned_to']}]")
+        pdf.ln(1)
+    buffer = BytesIO()
+    pdf.output(buffer)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
+
 if uploaded_files:
     all_policy_text = ""
     dashboard_data = []
@@ -421,6 +464,17 @@ if uploaded_files:
                 </div>
                 """,
                 unsafe_allow_html=True
+            )
+
+        # === STEP 6: PDF EXPORT BUTTON FOR THIS FILE ===
+        if st.button(f"Export summary for {fname} as PDF", key=f"{fname}_export_btn"):
+            pdf_bytes = export_policy_pdf(fname, doc['summary'], doc['obligations'])
+            st.download_button(
+                label="Download PDF",
+                data=pdf_bytes,
+                file_name=f"{fname}_summary.pdf",
+                mime="application/pdf",
+                key=f"{fname}_download_btn"
             )
 
     # === POLICY Q&A CHAT ===
