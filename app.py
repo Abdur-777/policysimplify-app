@@ -1,31 +1,4 @@
-# --- PIN LOGIN (QUICK MVP AUTH) ---
 import streamlit as st
-
-APP_PIN = "wyndhamsecure2024"  # CHANGE THIS to your own secure PIN!
-
-if "pin_authenticated" not in st.session_state:
-    st.session_state["pin_authenticated"] = False
-
-if not st.session_state["pin_authenticated"]:
-    st.markdown(
-        """
-        <div style="margin-top:90px; margin-bottom:32px; text-align:center;">
-            <span style="font-size:2.1em; color:#1966b2; font-weight:700;">PolicySimplify AI</span><br>
-            <span style="color:#1565c0;">Council Portal Login</span>
-        </div>
-        """, unsafe_allow_html=True
-    )
-    pin_input = st.text_input("Enter council access code:", type="password", key="app_pin")
-    login_btn = st.button("Unlock")
-    if login_btn:
-        if pin_input == APP_PIN:
-            st.session_state["pin_authenticated"] = True
-            st.experimental_rerun()
-        else:
-            st.error("Invalid PIN. Please try again or contact support.")
-    st.stop()
-
-# --- MAIN APP ---
 import PyPDF2
 import openai
 import os
@@ -33,18 +6,31 @@ import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
 
-# === BRANDING ===
+# === COUNCIL CONFIG ===
 COUNCIL_NAME = "Wyndham City Council"
 COUNCIL_LOGO = "https://www.wyndham.vic.gov.au/themes/custom/wyndham/logo.png"
 GOV_ICON = "https://cdn-icons-png.flaticon.com/512/3209/3209872.png"
+COUNCIL_PIN = "4321"  # <-- Set your secret PIN here!
+
+# === PAGE STYLING & THEME ===
+st.set_page_config(page_title="PolicySimplify AI", page_icon=GOV_ICON, layout="centered")
+st.markdown("""
+    <style>
+    body, .stApp { background: #eaf3fa; }
+    .main { background: #eaf3fa; }
+    .reportview-container { background: #eaf3fa; }
+    .reminder { color: #fff; background:#e65c5c; padding: 6px 12px; border-radius: 6px; margin-right: 8px; }
+    .reminder-upcoming { color: #fff; background:#f3c852; padding: 6px 12px; border-radius: 6px; margin-right: 8px; }
+    </style>
+""", unsafe_allow_html=True)
 
 # === SIDEBAR ===
 with st.sidebar:
     st.markdown(
         f"""
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom: 18px;">
-            <img src="{COUNCIL_LOGO}" width="54" style="border-radius:13px;box-shadow:0 1px 8px #1112;"/>
-            <div style="font-size:1.24em; font-weight:700; color:#1565c0;">{COUNCIL_NAME}</div>
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom: 22px;">
+            <img src="{COUNCIL_LOGO}" width="56" style="border-radius:14px;box-shadow:0 1px 8px #1112;"/>
+            <div style="font-size:1.26em; font-weight:700; color:#1565c0;">{COUNCIL_NAME}</div>
         </div>
         """, unsafe_allow_html=True
     )
@@ -55,7 +41,7 @@ with st.sidebar:
             display: block;
             padding: 10px 0 8px 0;
             color: #1565c0;
-            font-size: 1.08em;
+            font-size: 1.09em;
             font-weight: 500;
             border-radius: 6px;
             text-decoration: none;
@@ -79,55 +65,77 @@ with st.sidebar:
     st.markdown("---")
     st.caption("🔒 All data stored securely in Australia.")
 
-# PAGE STYLING
-st.set_page_config(page_title="PolicySimplify AI", page_icon="✅", layout="centered")
-st.markdown("""
-    <style>
-    body, .stApp { background-color: #eaf3fa; }
-    .main { background-color: #eaf3fa; }
-    .reportview-container { background-color: #eaf3fa; }
-    .reminder { color: #fff; background:#e65c5c; padding: 6px 12px; border-radius: 6px; margin-right: 8px; }
-    .reminder-upcoming { color: #fff; background:#f3c852; padding: 6px 12px; border-radius: 6px; margin-right: 8px; }
-    </style>
-""", unsafe_allow_html=True)
+# === PIN LOGIN ===
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
 
-# --- HERO HEADER ---
-st.markdown("""
+if not st.session_state["logged_in"]:
+    st.markdown(
+        f"""
+        <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:70px;margin-bottom:16px;">
+            <img src="{GOV_ICON}" width="56"/>
+            <span style="font-size:2.2em;font-weight:800;color:#1464b2;letter-spacing:-.5px;">PolicySimplify AI</span>
+        </div>
+        <div style="text-align:center;font-size:1.25em;color:#1565c0;">Council Access Required</div>
+        """, unsafe_allow_html=True
+    )
+    pin = st.text_input("Enter council access code (PIN):", type="password")
+    if st.button("Unlock"):
+        if pin == COUNCIL_PIN:
+            st.session_state["logged_in"] = True
+            st.success("Access granted. Welcome, Wyndham Council team!")
+            st.rerun()
+        else:
+            st.error("Incorrect PIN. Please try again.")
+    st.stop()
+
+# === HERO HEADER (with LOGO + ICON) ===
+st.markdown(f"""
 <style>
-.hero-card {
+.hero-card {{
   background: linear-gradient(90deg, #1966b2 0%, #44bbff 100%);
   color: #fff;
-  border-radius: 30px;
+  border-radius: 32px;
   box-shadow: 0 4px 24px #1966b230;
-  padding: 34px 20px 30px 20px;
-  margin-bottom: 38px;
+  padding: 36px 26px 32px 26px;
+  margin-bottom: 42px;
   text-align: center;
-  max-width: 640px;
+  max-width: 690px;
   margin-left: auto;
   margin-right: auto;
-}
-.hero-icon {
+  position:relative;
+}}
+.hero-icon {{
   font-size: 2.9em;
-  margin-bottom: 6px;
-}
-.hero-title {
-  font-size: 2.5em;
+  margin-bottom: 0;
+  position:absolute;left:30px;top:31px;
+}}
+.hero-logo {{
+  position:absolute;right:28px;top:26px;border-radius:17px;width:58px;box-shadow:0 3px 16px #1464b250;
+}}
+.hero-title {{
+  font-size: 2.7em;
   font-weight: 900;
-  letter-spacing: -1px;
+  letter-spacing: -1.2px;
   margin-bottom: 8px;
-}
-.hero-sub {
-  font-size: 1.2em;
+  padding-top:8px;
+}}
+.hero-sub {{
+  font-size: 1.18em;
   color: #e3f2fd;
   font-weight: 400;
   margin-bottom: 2px;
-}
+}}
+@media (max-width:650px) {{
+    .hero-logo, .hero-icon {{display:none;}}
+}}
 </style>
 <div class="hero-card">
-  <div class="hero-icon">📄</div>
+  <img src="{GOV_ICON}" class="hero-icon"/>
+  <img src="{COUNCIL_LOGO}" class="hero-logo"/>
   <div class="hero-title">PolicySimplify AI</div>
   <div class="hero-sub">Council: <b>Wyndham City Council</b></div>
-  <div style="font-size:1.07em; margin:14px 0 0 0;">Upload council policies & instantly see what matters.<br>
+  <div style="font-size:1.11em; margin:13px 0 0 0;">Upload council policies & instantly see what matters.<br>
   <span style="color:#d2ffad;">Australian-hosted • Secure • Unlimited uploads</span></div>
 </div>
 """, unsafe_allow_html=True)
@@ -186,14 +194,11 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)  # use new SDK!
 
 # === SESSION STATE ===
 if 'obligations' not in st.session_state:
-    st.session_state['obligations'] = {}  # key: filename, value: list of dicts
-
+    st.session_state['obligations'] = {}
 if 'audit_log' not in st.session_state:
-    st.session_state['audit_log'] = []  # {action, file, obligation, who, time}
-
+    st.session_state['audit_log'] = []
 if 'search_text' not in st.session_state:
     st.session_state['search_text'] = ""
-
 if 'recent_uploads' not in st.session_state:
     st.session_state['recent_uploads'] = []
 
@@ -253,17 +258,17 @@ Question: {query}
     return response.choices[0].message.content.strip()
 
 def get_deadline_color(deadline_str):
-    if not deadline_str: return "#eaf3fa"  # default
+    if not deadline_str: return "#eaf3fa"
     try:
         if "within" in deadline_str or "every" in deadline_str:
-            return "#f3c852"  # yellow chip
+            return "#f3c852"
         date = pd.to_datetime(deadline_str, errors="coerce")
         if pd.isnull(date): return "#eaf3fa"
         today = pd.Timestamp.now()
         if date < today:
-            return "#e65c5c"  # red overdue
+            return "#e65c5c"
         elif (date - today).days <= 7:
-            return "#f3c852"  # yellow due soon
+            return "#f3c852"
     except:
         return "#eaf3fa"
     return "#eaf3fa"
@@ -275,7 +280,6 @@ if uploaded_files:
         pdf_text = extract_pdf_text(uploaded_file)
         all_policy_text += "\n\n" + pdf_text
 
-        # --- Recent Uploads Logic ---
         uploaded = any(
             entry['filename'] == uploaded_file.name
             for entry in st.session_state['recent_uploads']
@@ -294,7 +298,6 @@ if uploaded_files:
                 obligations_list = []
                 for line in obligations_part.strip().split("\n"):
                     if line.strip().startswith("-"):
-                        # Attempt to extract deadline from obligation
                         text = line.strip()[1:].strip()
                         deadline = ""
                         for kw in ["by ", "before ", "within ", "every ", "on ", "due ", "deadline:"]:
@@ -369,7 +372,7 @@ if uploaded_files:
     else:
         st.info("No matching obligations found.")
 
-    # === STEP 5: RECENT UPLOADS SECTION ===
+    # === RECENT UPLOADS SECTION ===
     st.markdown("---")
     st.markdown("""
     <style>
@@ -412,7 +415,7 @@ if uploaded_files:
         st.info("No uploads yet. Your recently uploaded files will appear here.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # === STEP 4: VISUAL OBLIGATION CARDS ===
+    # === VISUAL OBLIGATION CARDS ===
     st.markdown("---")
     st.markdown("""
     <style>
@@ -478,5 +481,5 @@ else:
 
 st.markdown("---")
 st.markdown("""
-<span style='color: #59c12a; font-weight:bold;'>PolicySimplify AI – Built for Australian councils. All data hosted securely in Australia.</span>
+<span style='color: #59c12a; font-weight:bold;'>PolicySimplify AI – Built for Wyndham City Council. All data hosted securely in Australia.</span>
 """, unsafe_allow_html=True)
