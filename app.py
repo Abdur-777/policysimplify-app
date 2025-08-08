@@ -5,79 +5,148 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
-import random
+import base64
 
-# ========== CONFIGURATION ==========
+# =========================
+# CONFIG + MULTI-COUNCIL
+# =========================
+
 COUNCILS = [
     {
         "name": "Wyndham City Council",
         "logo": "https://www.wyndham.vic.gov.au/themes/custom/wyndham/logo.png",
-        "color": "#1565c0"
+        "color": "#1565c0",
+        "gradient": "linear-gradient(90deg, #1966b2 0%, #44bbff 100%)"
     },
     {
         "name": "Council Whyndah",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/5/5f/City_of_Whyndah_logo.png",  # You can replace with real logo
-        "color": "#139496"
+        "logo": "https://upload.wikimedia.org/wikipedia/commons/5/5f/City_of_Whyndah_logo.png",
+        "color": "#139496",
+        "gradient": "linear-gradient(90deg, #0e7a6f 0%, #32c4a7 100%)"
     }
 ]
 GOV_ICON = "https://cdn-icons-png.flaticon.com/512/3209/3209872.png"
+LANGUAGES = {"English":"en", "简体中文":"zh", "Español":"es"}
+DEFAULT_LANG = "English"
 
-# ========== STATE INIT ==========
-if 'council_idx' not in st.session_state:
-    st.session_state['council_idx'] = 0
-if 'obligations' not in st.session_state:
-    st.session_state['obligations'] = {}
-if 'audit_log' not in st.session_state:
-    st.session_state['audit_log'] = []
-if 'search_text' not in st.session_state:
-    st.session_state['search_text'] = ""
-if 'recent_uploads' not in st.session_state:
-    st.session_state['recent_uploads'] = []
-if 'dark_mode' not in st.session_state:
-    st.session_state['dark_mode'] = False
-if 'show_onboarding' not in st.session_state:
-    st.session_state['show_onboarding'] = True
-if 'upload_confetti' not in st.session_state:
-    st.session_state['upload_confetti'] = False
-if 'feedback' not in st.session_state:
-    st.session_state['feedback'] = {}  # {filename: True/False/None}
-if 'autosaved' not in st.session_state:
-    st.session_state['autosaved'] = True
+# =========================
+# SESSION STATE
+# =========================
 
-# ========== UTILITIES ==========
+if "council_idx" not in st.session_state:
+    st.session_state["council_idx"] = 0
+if "obligations" not in st.session_state:
+    st.session_state["obligations"] = {}
+if "audit_log" not in st.session_state:
+    st.session_state["audit_log"] = []
+if "search_text" not in st.session_state:
+    st.session_state["search_text"] = ""
+if "recent_uploads" not in st.session_state:
+    st.session_state["recent_uploads"] = []
+if "dark_mode" not in st.session_state:
+    st.session_state["dark_mode"] = False
+if "show_onboarding" not in st.session_state:
+    st.session_state["show_onboarding"] = True
+if "feedback" not in st.session_state:
+    st.session_state["feedback"] = {}
+if "autosaved" not in st.session_state:
+    st.session_state["autosaved"] = True
+if "user_name" not in st.session_state:
+    st.session_state["user_name"] = "You"
+if "user_avatar" not in st.session_state:
+    st.session_state["user_avatar"] = ""
+if "recent_qa" not in st.session_state:
+    st.session_state["recent_qa"] = []
+if "language" not in st.session_state:
+    st.session_state["language"] = DEFAULT_LANG
+if "admin_pin" not in st.session_state:
+    st.session_state["admin_pin"] = ""
+if "show_admin" not in st.session_state:
+    st.session_state["show_admin"] = False
+if "show_disclaimer" not in st.session_state:
+    st.session_state["show_disclaimer"] = True
+
 def council():
     return COUNCILS[st.session_state['council_idx']]
 
-# ========== PAGE STYLING ==========
-st.set_page_config(page_title="PolicySimplify AI", page_icon="✅", layout="centered")
-primary_color = council()["color"] if not st.session_state["dark_mode"] else "#212121"
+# =========================
+# PAGE STYLING
+# =========================
+
+primary_color = council()["color"]
+gradient = council()["gradient"]
 bg_color = "#eaf3fa" if not st.session_state["dark_mode"] else "#131924"
 txt_color = "#1966b2" if not st.session_state["dark_mode"] else "#f4f4f4"
 alt_bg = "#fff" if not st.session_state["dark_mode"] else "#1b2537"
 
+st.set_page_config(page_title="PolicySimplify AI", page_icon="✅", layout="centered")
 st.markdown(f"""
     <style>
     body, .stApp {{ background-color: {bg_color}; }}
     .main {{ background-color: {bg_color}; }}
     .reportview-container {{ background-color: {bg_color}; }}
-    .reminder {{ color: #fff; background:#e65c5c; padding: 6px 12px; border-radius: 6px; margin-right: 8px; }}
-    .reminder-upcoming {{ color: #fff; background:#f3c852; padding: 6px 12px; border-radius: 6px; margin-right: 8px; }}
     html, body, input, textarea {{ font-size: 18px !important; }}
+    .inline-help {{
+        color: #2687e6;
+        background: #d6eeff;
+        border-radius: 9px;
+        font-size: 0.97em;
+        padding: 1px 9px;
+        margin-left: 6px;
+        cursor: help;
+        border: 1px solid #92cfff;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
-# ========== SIDEBAR ==========
+# =========================
+# ADMIN & PRIVACY POPUP
+# =========================
+
+if st.session_state["show_disclaimer"]:
+    st.warning("By uploading files, you confirm your right to handle council data and agree to our Privacy & Compliance Policy.", icon="🔒")
+    if st.button("I Understand", key="close_disclaimer"):
+        st.session_state["show_disclaimer"] = False
+
+def admin_panel():
+    st.header("🔑 Admin Feedback Dashboard")
+    feedback_list = []
+    for fname, doc in st.session_state['obligations'].items():
+        for idx, obl in enumerate(doc["obligations"]):
+            k = f"{fname}-{idx}"
+            fb = st.session_state['feedback'].get(k, None)
+            if fb is not None:
+                feedback_list.append({"File":fname, "Obligation":obl["text"], "Feedback":"👍" if fb else "👎"})
+    if feedback_list:
+        st.dataframe(pd.DataFrame(feedback_list))
+    else:
+        st.info("No feedback yet.")
+    st.info("This dashboard is only visible after entering the admin PIN.")
+
+if st.session_state["show_admin"]:
+    admin_panel()
+
+# =========================
+# SIDEBAR
+# =========================
+
 with st.sidebar:
-    # Dark mode toggle
     if st.button("🌙" if not st.session_state["dark_mode"] else "☀️", help="Toggle dark mode"):
         st.session_state["dark_mode"] = not st.session_state["dark_mode"]
         st.experimental_rerun()
     st.selectbox("Switch Council", [c["name"] for c in COUNCILS], index=st.session_state['council_idx'],
                  key="council_idx", on_change=lambda: st.experimental_rerun())
+    st.selectbox("🌏 Language", list(LANGUAGES.keys()), index=list(LANGUAGES.keys()).index(st.session_state["language"]), key="language")
+    # User settings
+    st.text_input("Display Name", value=st.session_state["user_name"], key="user_name")
+    user_avatar = st.text_input("Profile Photo URL (optional)", value=st.session_state["user_avatar"])
+    if user_avatar:
+        st.session_state["user_avatar"] = user_avatar
+        st.markdown(f"<img src='{user_avatar}' width='54' style='border-radius:99px;box-shadow:0 1px 8px #1112; margin: 3px 0;'/>", unsafe_allow_html=True)
     st.markdown(
         f"""
         <div style="display:flex; align-items:center; gap:12px; margin-bottom: 18px;">
-            <img src="{council()['logo']}" width="54" style="border-radius:13px;box-shadow:0 1px 8px #1112;" alt="Council Logo"/>
+            <img src="{council()['logo']}" width="54" style="border-radius:13px;box-shadow:0 1px 8px #1112;"/>
             <div style="font-size:1.24em; font-weight:700; color:{primary_color};">{council()['name']}</div>
         </div>
         """, unsafe_allow_html=True
@@ -93,30 +162,37 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     st.markdown("---")
+    # Step 29: Admin Feedback Dashboard PIN
+    admin = st.text_input("🔑 Admin PIN", type="password", key="admin_pin_input")
+    if admin == "8888":  # Change PIN as needed
+        st.session_state["show_admin"] = True
     st.caption("🔒 All data stored securely in Australia.")
 
-# ========== HERO HEADER ==========
+# =========================
+# HERO HEADER
+# =========================
+
 st.markdown(f"""
 <style>
 .hero-container {{
     margin: 38px auto 0 auto;
-    max-width: 710px;
+    max-width: 730px;
 }}
 .hero-card {{
-    background: linear-gradient(90deg, {primary_color} 0%, #44bbff 100%);
+    background: {gradient};
     color: #fff;
     border-radius: 32px;
-    box-shadow: 0 4px 28px #1966b222;
-    padding: 32px 44px 26px 44px;
+    box-shadow: 0 4px 32px #1966b228;
+    padding: 36px 54px 26px 54px;
     margin-bottom: 42px;
     text-align: left;
     min-width: 320px;
 }}
 .hero-row {{
-    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 26px; flex-wrap: wrap;
 }}
 .hero-title {{
-    font-size: 2.45em; font-weight: 900; letter-spacing: -1px; color: #fff; display: flex; align-items: center; gap: 13px;
+    font-size: 2.50em; font-weight: 900; letter-spacing: -1px; color: #fff; display: flex; align-items: center; gap: 16px;
 }}
 .hero-ai-flare {{
     margin-left: 3px; display: inline-block; width: 15px; height: 15px;
@@ -129,19 +205,19 @@ st.markdown(f"""
     0% {{ box-shadow: 0 0 6px 2px #b2f7d1b0;}}
     100% {{ box-shadow: 0 0 16px 4px #91f5b1b7;}}
 }}
-.hero-sub {{ font-size: 1.22em; color: #e3f2fd; font-weight: 400; margin-bottom: 4px; margin-top: 2px; }}
-@media (max-width:650px){{.hero-card{{padding:16px 8px 16px 8px;}} .hero-title{{font-size:1.47em;}}}}
+.hero-sub {{ font-size: 1.16em; color: #e3f2fd; font-weight: 400; margin-bottom: 4px; margin-top: 2px; }}
+@media (max-width:650px){{.hero-card{{padding:14px 8px 18px 8px;}} .hero-title{{font-size:1.17em;}}}}
 </style>
 <div class="hero-container">
 <div class="hero-card">
     <div class="hero-row">
-        <img src="{GOV_ICON}" width="56" height="56" style="border-radius:18px;box-shadow:0 2px 12px #1579c099;object-fit:cover;" class="hero-icon-bounce" alt="Book Icon"/>
+        <img src="{GOV_ICON}" width="54" height="54" style="border-radius:18px;box-shadow:0 2px 12px #1579c099;object-fit:cover;" class="hero-icon-bounce" alt="Book Icon"/>
         <div>
             <div class="hero-title">
                 PolicySimplify AI <span class="hero-ai-flare" title="AI-powered"></span>
             </div>
             <div class="hero-sub"><b>Council:</b> {council()['name']}</div>
-            <div style="font-size:1.01em; margin:5px 0 0 0;color:#eafff3;">
+            <div style="font-size:1.02em; margin:4px 0 0 0;color:#eafff3;">
                 Upload council policies & instantly see what matters.<br>
                 <span style="color:#e4ffd7;font-weight:500;">Australian-hosted • Secure • Unlimited uploads</span>
             </div>
@@ -151,22 +227,31 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ========== STEP 12: ONBOARDING TOOLTIP ==========
+# =========================
+# ONBOARDING
+# =========================
+
 if st.session_state["show_onboarding"]:
     st.info("👋 Welcome! Start by uploading a council policy PDF, then click the ‘?’ icons for help at any time.", icon="👋")
     if st.button("Got it! Hide this tip", key="hide_onboard"):
         st.session_state["show_onboarding"] = False
         st.experimental_rerun()
 
-# ========== UPLOAD CARD (with HELP) ==========
+# =========================
+# UPLOAD ZONE (w/help)
+# =========================
+
 st.markdown(f"""
 <div class="upload-card" aria-label="Upload area" style="background:{alt_bg};">
     <div class="upload-icon">📥</div>
-    <div class="upload-title">Upload Policy PDF(s)
-        <span title="Upload your council policy documents here. Supported: PDF. Max 200MB each." style="cursor:help;font-weight:bold; color:{primary_color}; margin-left:7px;">❓</span>
+    <div class="upload-title">
+        Upload Policy PDF(s)
+        <span class="inline-help" title="Step 1: Upload one or more council policy PDFs. Only PDF, max 200MB each.">?</span>
     </div>
-    <div class="upload-sub" style="color:#388e3c;">Drag & drop or click to select policy documents.<br>
-    <span style="color:#4caf50;">Max 200MB each • PDF only</span></div>
+    <div class="upload-sub" style="color:#388e3c;">
+        Drag & drop or click to select policy documents.<br>
+        <span style="color:#4caf50;">Max 200MB each • PDF only</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -179,19 +264,28 @@ uploaded_files = st.file_uploader(
 
 st.markdown("---")
 
-# ========== STEP 14: SHARE BUTTON ==========
+# =========================
+# SHARE BUTTON
+# =========================
+
 st.markdown("""
-<div style="margin-bottom:24px;">
+<div style="margin-bottom:16px;">
     <button onclick="navigator.clipboard.writeText(window.location.href);alert('Page URL copied!')" style="background:#1764a7;color:white;padding:7px 19px;border:none;border-radius:9px;margin-right:10px;cursor:pointer;font-size:1em;">🔗 Share this tool</button>
 </div>
 """, unsafe_allow_html=True)
 
-# ========== OPENAI KEY ==========
+# =========================
+# LOAD OPENAI KEY
+# =========================
+
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# ========== HELPERS ==========
+# =========================
+# HELPERS
+# =========================
+
 def extract_pdf_text(pdf_file):
     pdf_reader = PyPDF2.PdfReader(pdf_file)
     text = ""
@@ -248,7 +342,7 @@ Question: {query}
     return response.choices[0].message.content.strip()
 
 def get_deadline_color(deadline_str):
-    if not deadline_str: return "#eaf3fa"  # default
+    if not deadline_str: return "#eaf3fa"
     try:
         if "within" in deadline_str or "every" in deadline_str:
             return "#f3c852"
@@ -263,16 +357,39 @@ def get_deadline_color(deadline_str):
         return "#eaf3fa"
     return "#eaf3fa"
 
-# ========== MAIN LOGIC ==========
+def pdf_download_button(summary, obligations, filename="PolicySimplify_Summary.pdf"):
+    """ Step 24: Export as PDF """
+    from fpdf import FPDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 12, "PolicySimplify AI Summary", ln=1)
+    pdf.set_font("Arial", "", 12)
+    pdf.multi_cell(0, 10, f"Summary:\n{summary}\n")
+    pdf.cell(0, 12, "Obligations:", ln=1)
+    for o in obligations:
+        pdf.multi_cell(0, 8, "- "+o["text"])
+    pdf_file = f"/tmp/{filename}"
+    pdf.output(pdf_file)
+    with open(pdf_file, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    st.download_button("⬇️ Download summary as PDF", f"data:application/pdf;base64,{b64}", file_name=filename)
+
+# =========================
+# MAIN LOGIC
+# =========================
+
 if uploaded_files:
     all_policy_text = ""
     dashboard_data = []
-    new_file_uploaded = False
     for uploaded_file in uploaded_files:
+        # Step 28: File validation
+        if not uploaded_file.name.lower().endswith(".pdf"):
+            st.error(f"❌ {uploaded_file.name} is not a PDF. Please upload PDF files only.")
+            continue
         pdf_text = extract_pdf_text(uploaded_file)
         all_policy_text += "\n\n" + pdf_text
 
-        # --- Recent Uploads Logic ---
         uploaded = any(
             entry['filename'] == uploaded_file.name
             for entry in st.session_state['recent_uploads']
@@ -282,7 +399,6 @@ if uploaded_files:
                 "filename": uploaded_file.name,
                 "uploaded_at": datetime.now().strftime('%Y-%m-%d %H:%M')
             })
-            new_file_uploaded = True
         st.session_state['recent_uploads'] = st.session_state['recent_uploads'][:10]
 
         if uploaded_file.name not in st.session_state['obligations']:
@@ -313,18 +429,63 @@ if uploaded_files:
                     "action": "upload",
                     "file": uploaded_file.name,
                     "obligation": "",
-                    "who": "You",
+                    "who": st.session_state["user_name"],
                     "time": datetime.now().strftime("%Y-%m-%d %H:%M")
                 })
-                st.session_state["autosaved"] = True
 
-    # ========== STEP 13: CONFETTI ON FIRST UPLOAD ==========
-    if new_file_uploaded:
-        st.balloons()
-        st.session_state["upload_confetti"] = True
+    # ===== STEP 20: INLINE HELP =====
+    st.markdown("""
+    <span class="inline-help" title="Use reminders to catch overdue or upcoming deadlines.">?</span>
+    """, unsafe_allow_html=True)
 
-    # ========== REMINDERS BAR ==========
-    st.markdown("### ⏰ Reminders <span title='See all compliance obligations with deadlines.' style='cursor:help;'>❓</span>", unsafe_allow_html=True)
+    # ===== STEP 21: END-USER SETTINGS =====
+    st.markdown(f"<span style='font-size:1.08em;color:#1565c0;'>Hi, {st.session_state['user_name']}!</span>", unsafe_allow_html=True)
+
+    # ===== STEP 22: PER-COUNCIL BRANDING (ALREADY DONE) =====
+
+    # ===== STEP 23: FEEDBACK ON SUMMARY/OBLIGATIONS =====
+    st.markdown("#### 📥 Feedback (click 👍 or 👎 on any obligation card below)")
+    
+    # ===== STEP 24: PDF EXPORT BUTTON (per policy) =====
+    for fname, doc in st.session_state['obligations'].items():
+        pdf_download_button(doc["summary"], doc["obligations"], filename=f"{fname}_summary.pdf")
+
+    # ===== STEP 25: RECENT Q&A SIDEBAR =====
+    st.markdown("### Recent Q&A")
+    for q, a in st.session_state["recent_qa"][-5:][::-1]:
+        st.markdown(f"<b>Q:</b> {q}<br><b>A:</b> {a}", unsafe_allow_html=True)
+
+    # ===== STEP 26: MULTI-LANGUAGE UI (UI ONLY, NOT LLM) =====
+    if st.session_state["language"] != "English":
+        st.info("🌏 Language switching is UI only; LLM answers remain in English for now.")
+
+    # ===== STEP 27: MOBILE FLOATING BAR =====
+    st.markdown("""
+    <style>
+    @media (max-width:700px){
+        .floatbar{
+            display:block; position:fixed; bottom:28px; left:0; right:0; z-index:1000;
+            background:#fff; box-shadow:0 2px 18px #1764a722; border-radius:15px;
+            max-width:360px;margin:0 auto; text-align:center; padding:8px 12px;
+        }
+        .floatbar button{margin:0 8px;}
+    }
+    </style>
+    <div class="floatbar" style="display:none">
+        <button onclick="window.scrollTo(0,0)">⬆️ Upload</button>
+        <button onclick="window.scrollTo(0,document.body.scrollHeight/2)">💬 Chat</button>
+        <button onclick="window.scrollTo(0,document.body.scrollHeight)">🕵️ Audit</button>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ===== STEP 28: FILE TYPE VALIDATION (already above) =====
+
+    # ===== STEP 29: ADMIN FEEDBACK DASHBOARD (in sidebar, PIN: 8888) =====
+
+    # ===== STEP 30: PRIVACY/COMPLIANCE DISCLAIMER (top) =====
+
+    # === REMINDERS BAR ===
+    st.markdown("### ⏰ Reminders <span class='inline-help' title='See all overdue and upcoming obligations.'>?</span>", unsafe_allow_html=True)
     reminder_count, upcoming_count = 0, 0
     for fname, doc in st.session_state['obligations'].items():
         for obl in doc["obligations"]:
@@ -338,24 +499,9 @@ if uploaded_files:
     if reminder_count == 0 and upcoming_count == 0:
         st.info("No overdue or upcoming deadlines!")
 
-    # ========== MOBILE ACTION BAR ==========
-    st.markdown("""
-    <style>
-    @media (max-width:650px){
-        .mob-bar{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:99;justify-content:space-evenly;background:#1764a7c0;padding:7px 0;}
-        .mob-btn{color:#fff;font-size:1.4em;background:transparent;border:none;cursor:pointer;}
-    }
-    </style>
-    <div class="mob-bar" id="mobile-bar">
-      <button class="mob-btn" onclick="window.scrollTo(0,0)" title="Upload">⬆️</button>
-      <button class="mob-btn" onclick="document.getElementById('policy_qa').focus()" title="Ask AI">🤖</button>
-      <button class="mob-btn" onclick="window.scrollTo(0,document.body.scrollHeight)" title="Audit Log">🕵️</button>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ========== FULL-TEXT SEARCH ==========
+    # === FULL-TEXT SEARCH ===
     st.markdown("---")
-    st.markdown("### 🔍 Full-Text Search <span title='Search obligations, summaries, and policies.' style='cursor:help;'>❓</span>", unsafe_allow_html=True)
+    st.markdown("### 🔍 Full-Text Search <span class='inline-help' title='Search obligations, summaries, and policies.'>?</span>", unsafe_allow_html=True)
     search_text = st.text_input("Search all obligations, summaries, and policies...", key="search")
     st.session_state['search_text'] = search_text
     dashboard_data = []
@@ -387,29 +533,12 @@ if uploaded_files:
     else:
         st.info("No matching obligations found.")
 
-    # ========== STEP 15: AUTOSAVE & TICK ==========
-    st.markdown(
-        "<span style='font-size:1.1em;color:#59c12a;'>" + ("All changes autosaved ✔️" if st.session_state["autosaved"] else "Saving...") + "</span>",
-        unsafe_allow_html=True
-    )
-
-    # ========== STEP 16: VISUAL OBLIGATION CARDS ==========
+    # === COMPLIANCE DASHBOARD (CARD VIEW) ===
     st.markdown("---")
-    st.markdown("""
-    <style>
-    .ob-card {background:#fff;border-radius:18px;box-shadow:0 2px 14px #1966b222;margin-bottom:20px;padding:22px 22px 16px 22px;}
-    .ob-title {font-size:1.09em; font-weight:600; color:#1966b2;}
-    .ob-done {color:#59c12a; font-weight:700;}
-    .ob-chip {display:inline-block; background:#e3f2fd; color:#1764a7; border-radius:9px; padding:2px 11px 3px 11px; margin-right:7px; font-size:0.97em;}
-    .ob-overdue {background:#e65c5c; color:#fff;}
-    .ob-upcoming {background:#f3c852; color:#444;}
-    </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown("## 📊 Compliance Dashboard (Card View)")
+    st.markdown("## 📊 Compliance Dashboard (Card View) <span class='inline-help' title='Click the checkboxes to mark obligations as done.'>?</span>", unsafe_allow_html=True)
     for fname, doc in st.session_state['obligations'].items():
         st.markdown(f"<div class='ob-title'>📑 {fname}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='margin-bottom:8px;color:#1565c0;font-size:1.06em;'><b>Summary:</b> {doc['summary']}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-bottom:8px;color:{primary_color};font-size:1.06em;'><b>Summary:</b> {doc['summary']}</div>", unsafe_allow_html=True)
         for idx, obl in enumerate(doc["obligations"]):
             color = get_deadline_color(obl.get("deadline", ""))
             chip_class = "ob-chip"
@@ -418,6 +547,16 @@ if uploaded_files:
             elif color == "#f3c852":
                 chip_class += " ob-upcoming"
             status_icon = "✅" if obl['done'] else "⬜️"
+            # Inline feedback
+            k = f"{fname}-{idx}"
+            fb = st.session_state['feedback'].get(k, None)
+            fb_btn = ""
+            if fb is not None:
+                fb_btn = f"<span style='font-size:1.3em;'>{'👍' if fb else '👎'}</span>"
+            if st.button(f"👍", key=f"thumbsup_{fname}_{idx}"):
+                st.session_state['feedback'][k] = True
+            if st.button(f"👎", key=f"thumbsdown_{fname}_{idx}"):
+                st.session_state['feedback'][k] = False
             st.markdown(
                 f"""
                 <div class="ob-card">
@@ -426,27 +565,27 @@ if uploaded_files:
                     <span class="{chip_class}">{'Overdue' if color=='#e65c5c' else ('Due soon' if color=='#f3c852' else 'Deadline')}</span>
                     <span class="ob-chip">{obl.get('deadline', '')}</span>
                     <span class="ob-chip" style="background:#e3ffd6;color:#388e3c;">Assigned: {obl.get('assigned_to','')}</span>
-                    <span title="Was this summary helpful? Click thumbs up/down." style="cursor:pointer;">
-                        👍<input type="radio" name="fb{fname}{idx}" {('checked' if st.session_state['feedback'].get(fname+str(idx))==True else '')} onclick="window.location.reload()"/> 
-                        👎<input type="radio" name="fb{fname}{idx}" {('checked' if st.session_state['feedback'].get(fname+str(idx))==False else '')} onclick="window.location.reload()"/>
-                    </span>
+                    {fb_btn}
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
-    # ========== STEP 17: POLICY Q&A CHAT ==========
+    # === POLICY Q&A CHAT ===
     st.markdown("---")
-    st.markdown("## 🤖 Ask Your Policies (AI Chat) <span title='Ask questions about your policies. Answers are only based on your uploaded documents.' style='cursor:help;'>❓</span>", unsafe_allow_html=True)
+    st.markdown("## 🤖 Ask Your Policies (AI Chat) <span class='inline-help' title='Ask a question about your uploaded policies.'>?</span>", unsafe_allow_html=True)
     query = st.text_input("Ask a policy/compliance question", key="policy_qa")
     if query:
         with st.spinner("Getting answer..."):
             answer = ai_chat(query, all_policy_text)
         st.success(answer)
+        # Add to recent Q&A
+        st.session_state["recent_qa"].append((query, answer))
+        st.session_state["recent_qa"] = st.session_state["recent_qa"][-12:]  # Only last 12
 
-    # ========== STEP 18: AUDIT LOG ==========
+    # === AUDIT LOG ===
     st.markdown("---")
-    st.markdown("## 🕵️ Audit Log <span title='See all actions for compliance.' style='cursor:help;'>❓</span>", unsafe_allow_html=True)
+    st.markdown("## 🕵️ Audit Log <span class='inline-help' title='See all actions for compliance.'>?</span>", unsafe_allow_html=True)
     audit_df = pd.DataFrame(st.session_state['audit_log'])
     st.dataframe(audit_df, use_container_width=True)
     st.download_button(
