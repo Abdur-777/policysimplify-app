@@ -1,4 +1,31 @@
+# --- PIN LOGIN (QUICK MVP AUTH) ---
 import streamlit as st
+
+APP_PIN = "wyndhamsecure2024"  # CHANGE THIS to your own secure PIN!
+
+if "pin_authenticated" not in st.session_state:
+    st.session_state["pin_authenticated"] = False
+
+if not st.session_state["pin_authenticated"]:
+    st.markdown(
+        """
+        <div style="margin-top:90px; margin-bottom:32px; text-align:center;">
+            <span style="font-size:2.1em; color:#1966b2; font-weight:700;">PolicySimplify AI</span><br>
+            <span style="color:#1565c0;">Council Portal Login</span>
+        </div>
+        """, unsafe_allow_html=True
+    )
+    pin_input = st.text_input("Enter council access code:", type="password", key="app_pin")
+    login_btn = st.button("Unlock")
+    if login_btn:
+        if pin_input == APP_PIN:
+            st.session_state["pin_authenticated"] = True
+            st.experimental_rerun()
+        else:
+            st.error("Invalid PIN. Please try again or contact support.")
+    st.stop()
+
+# --- MAIN APP ---
 import PyPDF2
 import openai
 import os
@@ -11,22 +38,6 @@ COUNCIL_NAME = "Wyndham City Council"
 COUNCIL_LOGO = "https://www.wyndham.vic.gov.au/themes/custom/wyndham/logo.png"
 GOV_ICON = "https://cdn-icons-png.flaticon.com/512/3209/3209872.png"
 
-# === SESSION STATE INIT ===
-if 'obligations' not in st.session_state:
-    st.session_state['obligations'] = {}
-if 'audit_log' not in st.session_state:
-    st.session_state['audit_log'] = []
-if 'search_text' not in st.session_state:
-    st.session_state['search_text'] = ""
-if 'recent_uploads' not in st.session_state:
-    st.session_state['recent_uploads'] = []
-if 'num_questions' not in st.session_state:
-    st.session_state['num_questions'] = 0
-if 'num_downloads' not in st.session_state:
-    st.session_state['num_downloads'] = 0
-if 'feedback' not in st.session_state:
-    st.session_state['feedback'] = []
-
 # === SIDEBAR ===
 with st.sidebar:
     st.markdown(
@@ -37,7 +48,8 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True
     )
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         .sidebar-link {
             display: block;
@@ -52,17 +64,12 @@ with st.sidebar:
             background: #e3f2fd;
         }
         </style>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True
+    )
     st.markdown('<div class="sidebar-link" style="background:#e3f2fd;"><span style="vertical-align:-2px;">📄</span> Policy Upload</div>', unsafe_allow_html=True)
     st.markdown('<a class="sidebar-link" href="#reminders">⏰ Reminders</a>', unsafe_allow_html=True)
     st.markdown('<a class="sidebar-link" href="#dashboard">📊 Dashboard</a>', unsafe_allow_html=True)
     st.markdown('<a class="sidebar-link" href="#audit-log">🕵️ Audit Log</a>', unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown("### 📈 Usage Analytics")
-    num_uploads = len(st.session_state['recent_uploads'])
-    st.write(f"**Uploads:** {num_uploads}")
-    st.write(f"**Questions Asked:** {st.session_state['num_questions']}")
-    st.write(f"**CSVs Downloaded:** {st.session_state['num_downloads']}")
     st.markdown("---")
     st.markdown("**Feedback or support?**")
     st.markdown(
@@ -175,7 +182,20 @@ st.markdown("---")
 # === OPENAI KEY ===
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-client = openai.OpenAI(api_key=OPENAI_API_KEY)
+client = openai.OpenAI(api_key=OPENAI_API_KEY)  # use new SDK!
+
+# === SESSION STATE ===
+if 'obligations' not in st.session_state:
+    st.session_state['obligations'] = {}  # key: filename, value: list of dicts
+
+if 'audit_log' not in st.session_state:
+    st.session_state['audit_log'] = []  # {action, file, obligation, who, time}
+
+if 'search_text' not in st.session_state:
+    st.session_state['search_text'] = ""
+
+if 'recent_uploads' not in st.session_state:
+    st.session_state['recent_uploads'] = []
 
 def extract_pdf_text(pdf_file):
     pdf_reader = PyPDF2.PdfReader(pdf_file)
@@ -233,17 +253,17 @@ Question: {query}
     return response.choices[0].message.content.strip()
 
 def get_deadline_color(deadline_str):
-    if not deadline_str: return "#eaf3fa"
+    if not deadline_str: return "#eaf3fa"  # default
     try:
         if "within" in deadline_str or "every" in deadline_str:
-            return "#f3c852"
+            return "#f3c852"  # yellow chip
         date = pd.to_datetime(deadline_str, errors="coerce")
         if pd.isnull(date): return "#eaf3fa"
         today = pd.Timestamp.now()
         if date < today:
-            return "#e65c5c"
+            return "#e65c5c"  # red overdue
         elif (date - today).days <= 7:
-            return "#f3c852"
+            return "#f3c852"  # yellow due soon
     except:
         return "#eaf3fa"
     return "#eaf3fa"
@@ -274,6 +294,7 @@ if uploaded_files:
                 obligations_list = []
                 for line in obligations_part.strip().split("\n"):
                     if line.strip().startswith("-"):
+                        # Attempt to extract deadline from obligation
                         text = line.strip()[1:].strip()
                         deadline = ""
                         for kw in ["by ", "before ", "within ", "every ", "on ", "due ", "deadline:"]:
@@ -339,13 +360,12 @@ if uploaded_files:
     if dashboard_data:
         df = pd.DataFrame(dashboard_data)
         st.dataframe(df, use_container_width=True)
-        if st.download_button(
+        st.download_button(
             label="Download Obligations CSV",
             data=df.to_csv(index=False),
             file_name="policy_obligations.csv",
             mime="text/csv"
-        ):
-            st.session_state['num_downloads'] += 1
+        )
     else:
         st.info("No matching obligations found.")
 
@@ -439,7 +459,6 @@ if uploaded_files:
         with st.spinner("Getting answer..."):
             answer = ai_chat(query, all_policy_text)
         st.success(answer)
-        st.session_state['num_questions'] += 1
 
     # === AUDIT LOG ===
     st.markdown("---")
@@ -447,29 +466,12 @@ if uploaded_files:
     st.caption("All major actions are tracked for compliance and audit reporting.")
     audit_df = pd.DataFrame(st.session_state['audit_log'])
     st.dataframe(audit_df, use_container_width=True)
-    if st.download_button(
+    st.download_button(
         label="Download Audit Log CSV",
         data=audit_df.to_csv(index=False),
         file_name="audit_log.csv",
         mime="text/csv"
-    ):
-        st.session_state['num_downloads'] += 1
-
-    # === FEEDBACK SECTION ===
-    st.markdown("---")
-    st.markdown("### 💬 Leave Feedback")
-    rating = st.slider("How useful was this app?", 1, 5, 5, format="%d ⭐️")
-    comment = st.text_area("Any suggestions or issues?")
-    if st.button("Submit Feedback"):
-        st.session_state['feedback'].append({
-            "time": datetime.now().strftime('%Y-%m-%d %H:%M'),
-            "rating": rating,
-            "comment": comment
-        })
-        st.success("Thank you for your feedback!")
-    if st.session_state['feedback']:
-        fb_df = pd.DataFrame(st.session_state['feedback'])
-        st.download_button("Download Feedback CSV", fb_df.to_csv(index=False), "feedback.csv", "text/csv")
+    )
 
 else:
     st.info("Upload one or more council policy PDFs to begin.")
